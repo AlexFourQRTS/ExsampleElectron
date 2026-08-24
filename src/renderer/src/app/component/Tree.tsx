@@ -47,6 +47,7 @@ export interface FileTreeNode {
 
 interface TreeProps {
   onFilesChange: (files: FileDetailItem[]) => void;
+  onFolderSelect?: (path: string) => void;
 }
 
 declare global {
@@ -140,12 +141,16 @@ const FileTreeItem: React.FC<FileTreeItemProps> = ({
 // ОСНОВНОЙ КОМПОНЕНТ TREE
 // ==========================================
 
-export const Tree: React.FC<TreeProps> = ({ onFilesChange }) => {
+export const Tree: React.FC<TreeProps> = ({ onFilesChange, onFolderSelect }) => {
   const [treeData, setTreeData] = useState<FileTreeNode | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
   const handleSelectFolder = async (folderPath: string) => {
     try {
+      if (onFolderSelect) {
+        onFolderSelect(folderPath);
+      }
+
       const items = await window.api.getFolderFiles(folderPath);
 
       const itemsWithStats = await Promise.all(

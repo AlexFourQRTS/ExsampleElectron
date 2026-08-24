@@ -9,15 +9,20 @@ import {
   TableHead,
   TableRow,
   Paper,
+  Button,
 } from "@mui/material";
 import FolderIcon from "@mui/icons-material/Folder";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { FileDetailItem } from "./Tree";
 
 interface ContentProps {
   files: FileDetailItem[];
+  currentPath: string | null;
   selectedFileId?: string;
   onSelectFile: (file: FileDetailItem) => void;
+  onOpenFolder: (folderPath: string) => void;
+  onGoBack: () => void;
 }
 
 const formatFileSize = (bytes?: number): string => {
@@ -42,98 +47,197 @@ const formatDate = (dateInput?: Date): string => {
 
 export const Content: React.FC<ContentProps> = ({
   files,
+  currentPath,
   selectedFileId,
   onSelectFile,
+  onOpenFolder,
+  onGoBack,
 }) => {
-  if (!files || files.length === 0) {
-    return (
+  return (
+    <Box
+      sx={{
+        flexGrow: 1,
+        height: "100%",
+        p: 2,
+        display: "flex",
+        flexDirection: "column",
+        gap: 1.5,
+        boxSizing: "border-box",
+        overflow: "hidden",
+      }}
+    >
+      {/* Шапка с текущим путем */}
       <Box
         sx={{
           display: "flex",
-          flexGrow: 1,
-          height: "100%",
           alignItems: "center",
-          justifyContent: "center",
-          p: 2,
+          gap: 1,
+          p: 1,
+          backgroundColor: "action.hover",
+          borderRadius: 1,
+          border: 1,
+          borderColor: "divider",
         }}
       >
-        <Typography color="text.secondary" variant="body2">
-          В этой папке нет файлов или папка не выбрана
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ fontWeight: 600 }}
+        >
+          Путь:
+        </Typography>
+        <Typography
+          variant="body2"
+          sx={{
+            fontFamily: "monospace",
+            wordBreak: "break-all",
+            fontWeight: 500,
+          }}
+        >
+          {currentPath || "Папка не выбрана"}
         </Typography>
       </Box>
-    );
-  }
 
-  return (
-    <Box sx={{ flexGrow: 1, height: "100%", p: 2, overflowY: "auto", boxSizing: "border-box" }}>
-      <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: "divider" }}>
-        <Table size="small" stickyHeader>
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 600 }}>Имя</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Дата изменения</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Тип</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 600 }}>Размер</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {files.map((item) => {
-              const isSelected = item.id === selectedFileId;
-              return (
-                <TableRow
-                  key={item.id}
-                  hover
-                  selected={isSelected}
-                  onClick={() => onSelectFile(item)}
-                  sx={{
-                    cursor: "pointer",
-                    "&:last-child td, &:last-child th": { border: 0 },
-                  }}
-                >
-                  {/* Имя + Иконка */}
-                  <TableCell component="th" scope="row">
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      {item.type === "directory" ? (
-                        <FolderIcon fontSize="small" color="primary" />
-                      ) : (
-                        <InsertDriveFileIcon fontSize="small" color="action" />
-                      )}
-                      <Typography variant="body2" noWrap>
-                        {item.name}
-                      </Typography>
-                    </Box>
-                  </TableCell>
-
-                  {/* Дата изменения */}
-                  <TableCell>
-                    <Typography variant="body2" color="text.secondary">
-                      {formatDate(item.stats?.updatedAt)}
-                    </Typography>
-                  </TableCell>
-
-                  {/* Тип */}
-                  <TableCell>
-                    <Typography variant="body2" color="text.secondary">
-                      {item.type === "directory"
-                        ? "Папка"
-                        : item.stats?.extension
-                        ? `${item.stats.extension.toUpperCase()} файл`
-                        : "Файл"}
-                    </Typography>
-                  </TableCell>
-
-                  {/* Размер */}
-                  <TableCell align="right">
-                    <Typography variant="body2" color="text.secondary">
-                      {item.type === "directory" ? "--" : formatFileSize(item.stats?.size)}
-                    </Typography>
+      {/* Отрисовка контента */}
+      <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
+        {files.length === 0 ? (
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              height: "100%",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 2,
+            }}
+          >
+            <Typography color="text.secondary" variant="body2">
+              Папка пуста или не выбрана
+            </Typography>
+            {currentPath && (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<ArrowBackIcon />}
+                onClick={onGoBack}
+                sx={{ textTransform: "none" }}
+              >
+                Вернуться на папку назад
+              </Button>
+            )}
+          </Box>
+        ) : (
+          <TableContainer
+            component={Paper}
+            elevation={0}
+            sx={{ border: 1, borderColor: "divider" }}
+          >
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 600 }}>Имя</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Дата изменения</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Тип</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600 }}>
+                    Размер
                   </TableCell>
                 </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
+              </TableHead>
+              <TableBody>
+                {/* Строка ".." для перехода на уровень вверх */}
+                {currentPath && (
+                  <TableRow
+                    hover
+                    onClick={onGoBack}
+                    sx={{ cursor: "pointer", backgroundColor: "action.hover" }}
+                  >
+                    <TableCell colSpan={4}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1,
+                          fontWeight: 600,
+                        }}
+                      >
+                        <FolderIcon fontSize="small" color="action" />
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          ...
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                )}
+
+                {/* Список файлов и папок */}
+                {files.map((item) => {
+                  const isSelected = item.id === selectedFileId;
+                  return (
+                    <TableRow
+                      key={item.id}
+                      hover
+                      selected={isSelected}
+                      onClick={() => onSelectFile(item)}
+                      onDoubleClick={() => {
+                        if (item.type === "directory") {
+                          onOpenFolder(item.path);
+                        }
+                      }}
+                      sx={{
+                        cursor: "pointer",
+                        userSelect: "none",
+                        "&:last-child td, &:last-child th": { border: 0 },
+                      }}
+                    >
+                      <TableCell component="th" scope="row">
+                        <Box
+                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                        >
+                          {item.type === "directory" ? (
+                            <FolderIcon fontSize="small" color="primary" />
+                          ) : (
+                            <InsertDriveFileIcon
+                              fontSize="small"
+                              color="action"
+                            />
+                          )}
+                          <Typography variant="body2" noWrap>
+                            {item.name}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {formatDate(item.stats?.updatedAt)}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {item.type === "directory"
+                            ? "Папка"
+                            : item.stats?.extension
+                            ? `${item.stats.extension.toUpperCase()} файл`
+                            : "Файл"}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell align="right">
+                        <Typography variant="body2" color="text.secondary">
+                          {item.type === "directory"
+                            ? "--"
+                            : formatFileSize(item.stats?.size)}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Box>
     </Box>
   );
 };

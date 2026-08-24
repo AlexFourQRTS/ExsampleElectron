@@ -7,10 +7,43 @@ import { Preview } from "./component/Preview";
 export default function App(): JSX.Element {
   const [files, setFiles] = useState<FileDetailItem[]>([]);
   const [selectedFile, setSelectedFile] = useState<FileDetailItem | null>(null);
+  const [currentPath, setCurrentPath] = useState<string | null>(null);
 
   const handleFilesChange = (newFiles: FileDetailItem[]) => {
     setFiles(newFiles);
-    setSelectedFile(null); // Сбрасываем выбранный файл при выборе новой папки
+    setSelectedFile(null);
+  };
+
+  const handleOpenFolder = async (folderPath: string) => {
+    try {
+      const items = await window.api.getFolderFiles(folderPath);
+      const itemsWithStats = await Promise.all(
+        items.map(async (item) => {
+          try {
+            const stats = await window.api.getItemStats(item.path);
+            return { ...item, stats };
+          } catch {
+            return item;
+          }
+        })
+      );
+      setCurrentPath(folderPath);
+      handleFilesChange(itemsWithStats);
+    } catch (error) {
+      console.error("Ошибка при открытии папки:", error);
+    }
+  };
+
+  // Вычисление пути родительской папки (на шаг назад)
+  const handleGoBack = () => {
+    if (!currentPath) return;
+    const parts = currentPath.replace(/\\/g, "/").split("/").filter(Boolean);
+    if (parts.length <= 1) return; // Уже в корне
+    parts.pop();
+    const parentPath = currentPath.startsWith("/")
+      ? "/" + parts.join("/")
+      : parts.join("/");
+    handleOpenFolder(parentPath);
   };
 
   return (
@@ -25,21 +58,26 @@ export default function App(): JSX.Element {
         boxSizing: "border-box",
       }}
     >
-      {/* Левая панель — Дерево */}
-      <Tree onFilesChange={handleFilesChange} />
-
-      <Divider orientation="vertical" flexItem />
-
-      {/* Центральная панель — Список файлов */}
-      <Content
-        files={files}
-        selectedFileId={selectedFile?.id}
-        onSelectFile={setSelectedFile}
+      <Tree
+        onFilesChange={(newFiles) => {
+          handleFilesChange(newFiles);
+        }}
+        onFolderSelect={setCurrentPath}
       />
 
       <Divider orientation="vertical" flexItem />
 
-      {/* Правая панель — Предпросмотр */}
+      <Content
+        files={files}
+        currentPath={currentPath}
+        selectedFileId={selectedFile?.id}
+        onSelectFile={setSelectedFile}
+        onOpenFolder={handleOpenFolder}
+        onGoBack={handleGoBack}
+      />
+
+      <Divider orientation="vertical" flexItem />
+
       <Preview file={selectedFile} />
     </Container>
   );

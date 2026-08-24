@@ -4,9 +4,9 @@ import { Height } from "@mui/icons-material"
 export const AppBoxTree = ({
     m: 1,
     textAlign: 'center',
-    border : '1px solid #4d4d4d39',
+    // border : '1px solid #4d4d4d39',
     
-    p: '20px',
+    p: '10px',
     height : '1000px'
   })
 
@@ -14,14 +14,14 @@ export const AppBoxTree = ({
     m: 1,
     textAlign: 'center',
     border : '1px solid black',
-    p: '100px'
+    p: '10px'
   })
 
   export const AppBoxPreview = ({
     m: 1,
     textAlign: 'center',
     border : '1px solid black',
-    p: '100px'
+    p: '10px'
   })
 
 export const AppButton = ({
