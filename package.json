@@ -7,7 +7,8 @@
   "license": "MIT",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "electron-vite build && electron-builder",
+    "build": "electron-vite build",
+    "make": "electron-vite build && electron-builder",
     "preview": "electron-vite preview",
     "test": "vitest"
   },
@@ -36,12 +37,22 @@
   },
   "build": {
     "appId": "com.example.electronreact",
-    "productName": "electron example",
+    "productName": "Electron Example",
     "directories": {
       "output": "dist"
     },
     "files": [
       "out/**/*"
-    ]
+    ],
+    "mac": {
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": ["nsis"]
+    },
+    "linux": {
+      "target": ["AppImage"]
+    }
   }
 }
