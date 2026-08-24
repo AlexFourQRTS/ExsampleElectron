@@ -2,7 +2,10 @@ import { dialog } from 'electron'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 
-// Типы прямо в этом же файле
+// ==========================================
+// ТИПИЗАЦИЯ
+// ==========================================
+
 export interface FileItemStats {
   size: number
   createdAt: Date
@@ -19,6 +22,10 @@ export interface FileTreeNode {
   type: 'file' | 'directory'
   children?: FileTreeNode[]
 }
+
+// ==========================================
+// СЛУЖЕБНЫЙ КЛАСС APP SERVICE
+// ==========================================
 
 export class AppService {
   // 1. Пинг
@@ -68,9 +75,15 @@ export class AppService {
       }
     }
 
-    const entries = await fs.readdir(dirPath, { withFileTypes: true })
+    let entries: import('fs').Dirent[] = []
+    try {
+      entries = await fs.readdir(dirPath, { withFileTypes: true })
+    } catch {
+      // Возвращаем пустую папку, если нет прав на чтение
+      return { id: dirPath, name, path: dirPath, type: 'directory', children: [] }
+    }
 
-    // Исключаем системные файлы (например, .DS_Store на macOS или $RECYCLE.BIN)
+    // Исключаем системные скрытые файлы (.DS_Store и т.д.)
     const filteredEntries = entries.filter((e) => !e.name.startsWith('.'))
 
     const children = await Promise.all(
@@ -97,20 +110,71 @@ export class AppService {
     }
   }
 
-  // 5. Поверхностное чтение папки без глубокой рекурсии (для быстрой подгрузки)
+  // 5. Поверхностное чтение папки без глубокой рекурсии
   static async readDirectoryContent(dirPath: string): Promise<FileTreeNode[]> {
-    const entries = await fs.readdir(dirPath, { withFileTypes: true })
+    try {
+      const entries = await fs.readdir(dirPath, { withFileTypes: true })
 
-    return entries
-      .filter((e) => !e.name.startsWith('.'))
-      .map((entry) => {
+      return entries
+        .filter((e) => !e.name.startsWith('.'))
+        .map((entry) => {
+          const fullPath = path.join(dirPath, entry.name)
+          return {
+            id: fullPath,
+            name: entry.name,
+            path: fullPath,
+            type: entry.isDirectory() ? 'directory' : 'file',
+          }
+        })
+    } catch {
+      return []
+    }
+  }
+
+  // 6. Построение дерева ТОЛЬКО из папок (для компонента Tree.tsx)
+  static async getOnlyDirectoriesTree(dirPath: string): Promise<FileTreeNode> {
+    const name = path.basename(dirPath) || dirPath
+
+    let entries: import('fs').Dirent[] = []
+    try {
+      entries = await fs.readdir(dirPath, { withFileTypes: true })
+    } catch {
+      return { id: dirPath, name, path: dirPath, type: 'directory', children: [] }
+    }
+
+    // Фильтруем только директории, отсекая системные папки на `.`
+    const dirEntries = entries.filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+
+    const children = await Promise.all(
+      dirEntries.map(async (entry) => {
         const fullPath = path.join(dirPath, entry.name)
-        return {
-          id: fullPath,
-          name: entry.name,
-          path: fullPath,
-          type: entry.isDirectory() ? 'directory' : 'file',
-        }
+        return await AppService.getOnlyDirectoriesTree(fullPath)
       })
+    )
+
+    return {
+      id: dirPath,
+      name,
+      path: dirPath,
+      type: 'directory',
+      children,
+    }
+  }
+
+  // 7. Получение списка файлов/папок конкретной директории (для Content.tsx)
+  static async getFolderFiles(dirPath: string): Promise<FileTreeNode[]> {
+    try {
+      const entries = await fs.readdir(dirPath, { withFileTypes: true })
+      return entries
+        .filter((e) => !e.name.startsWith('.'))
+        .map((e) => ({
+          id: path.join(dirPath, e.name),
+          name: e.name,
+          path: path.join(dirPath, e.name),
+          type: e.isDirectory() ? ('directory' as const) : ('file' as const),
+        }))
+    } catch {
+      return []
+    }
   }
 }
