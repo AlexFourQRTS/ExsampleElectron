@@ -46,6 +46,7 @@ export const Content: React.FC<ContentProps> = ({ files }) => {
       <Box
         sx={{
           display: "flex",
+          flexGrow: 1,
           height: "100%",
           alignItems: "center",
           justifyContent: "center",
@@ -60,7 +61,7 @@ export const Content: React.FC<ContentProps> = ({ files }) => {
   }
 
   return (
-    <Box sx={{ height: "100%", p: 2, overflowY: "auto" }}>
+    <Box sx={{ flexGrow: 1, height: "100%", p: 2, overflowY: "auto" }}>
       <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: "divider" }}>
         <Table size="small" stickyHeader>
           <TableHead>
@@ -102,7 +103,7 @@ export const Content: React.FC<ContentProps> = ({ files }) => {
                   </Typography>
                 </TableCell>
 
-                {/* Тип (Расширение или Папка) */}
+                {/* Тип */}
                 <TableCell>
                   <Typography variant="body2" color="text.secondary">
                     {item.type === "directory"

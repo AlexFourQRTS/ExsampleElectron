@@ -16,10 +16,8 @@ import ExpandMore from "@mui/icons-material/ExpandMore";
 import ChevronRight from "@mui/icons-material/ChevronRight";
 import { AppBoxTree } from "../style/AppStyle";
 
-import { Content } from "./Content";
-
 // ==========================================
-// ВСЯ ТИПИЗАЦИЯ В ОДНОМ МЕСТЕ
+// ТИПИЗАЦИЯ
 // ==========================================
 
 export interface FileItemStats {
@@ -45,6 +43,10 @@ export interface FileTreeNode {
   path: string;
   type: "file" | "directory";
   children?: FileTreeNode[];
+}
+
+interface TreeProps {
+  onFilesChange: (files: FileDetailItem[]) => void;
 }
 
 declare global {
@@ -137,9 +139,8 @@ const FileTreeItem: React.FC<FileTreeItemProps> = ({
 // ОСНОВНОЙ КОМПОНЕНТ TREE
 // ==========================================
 
-export const Tree = () => {
+export const Tree: React.FC<TreeProps> = ({ onFilesChange }) => {
   const [treeData, setTreeData] = useState<FileTreeNode | null>(null);
-  const [filesList, setFilesList] = useState<FileDetailItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
 
   // Загрузка списка файлов + их метаданных при выборе папки
@@ -159,7 +160,8 @@ export const Tree = () => {
         })
       );
 
-      setFilesList(itemsWithStats);
+      // Отправляем файлы в родительский App
+      onFilesChange(itemsWithStats);
     } catch (error) {
       console.error("Ошибка при получении файлов:", error);
     }
@@ -185,61 +187,51 @@ export const Tree = () => {
   };
 
   return (
-    <Box sx={{ display: "flex", width: "100%", height: "100%" }}>
-      {/* Левая панель — Дерево */}
+    <Box
+      sx={{
+        ...AppBoxTree,
+        width: 280,
+        minWidth: 240,
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        userSelect: "none",
+        p: 1.5,
+      }}
+    >
       <Box
         sx={{
-          ...AppBoxTree,
-          width: 280,
-          minWidth: 240,
           display: "flex",
-          flexDirection: "column",
-          height: "100%",
-          userSelect: "none",
-          p: 1.5,
-          borderRight: 1,
-          borderColor: "divider",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 1.5,
         }}
       >
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            mb: 1.5,
-          }}
+        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "text.secondary" }}>
+          Проводник
+        </Typography>
+
+        <Button
+          variant="contained"
+          size="small"
+          onClick={handleLoadFolder}
+          disabled={loading}
+          sx={{ textTransform: "none" }}
         >
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "text.secondary" }}>
-            Проводник
-          </Typography>
-
-          <Button
-            variant="contained"
-            size="small"
-            onClick={handleLoadFolder}
-            disabled={loading}
-            sx={{ textTransform: "none" }}
-          >
-            {loading ? <CircularProgress size={16} /> : "Open Folder"}
-          </Button>
-        </Box>
-
-        <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
-          {treeData ? (
-            <List component="nav" disablePadding>
-              <FileTreeItem node={treeData} onSelectFolder={handleSelectFolder} />
-            </List>
-          ) : (
-            <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mt: 4 }}>
-              Папка не выбрана
-            </Typography>
-          )}
-        </Box>
+          {loading ? <CircularProgress size={16} /> : "Open Folder"}
+        </Button>
       </Box>
 
-      {/* Правая панель — Контент (отрисовывает список файлов с размерами) */}
-      <Box sx={{ flexGrow: 1, height: "100%", overflow: "hidden" }}>
-        <Content files={filesList} />
+      <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
+        {treeData ? (
+          <List component="nav" disablePadding>
+            <FileTreeItem node={treeData} onSelectFolder={handleSelectFolder} />
+          </List>
+        ) : (
+          <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mt: 4 }}>
+            Папка не выбрана
+          </Typography>
+        )}
       </Box>
     </Box>
   );
