@@ -1,0 +1,47 @@
+{
+  "name": "electron-example",
+  "version": "1.0.0",
+  "description": "Electron + React + MUI App",
+  "main": "./out/main/index.js",
+  "author": "Jane Doe",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build && electron-builder",
+    "preview": "electron-vite preview",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@electron-toolkit/preload": "^3.0.2",
+    "@electron-toolkit/utils": "^4.0.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/icons-material": "^6.0.0",
+    "@mui/material": "^6.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.0.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron": "28.2.0",
+    "electron-builder": "^24.13.3",
+    "electron-vite": "^2.3.0",
+    "jsdom": "^25.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^5.4.2",
+    "vitest": "^2.0.5"
+  },
+  "build": {
+    "appId": "com.example.electronreact",
+    "productName": "electron example",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*"
+    ]
+  }
+}
