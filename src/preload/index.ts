@@ -1,17 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
-// Описываем API, которое будет доступно в window.api
-const api = {
-  ping: (): Promise<string> => ipcRenderer.invoke('ping'),
-}
-
-if (process.contextIsolated) {
-  try {
-    contextBridge.exposeInMainWorld('api', api)
-  } catch (error) {
-    console.error(error)
-  }
-} else {
-  // @ts-ignore (на случай отключенной изоляции контекста)
-  window.api = api
-}
+contextBridge.exposeInMainWorld('api', {
+  ping: () => ipcRenderer.invoke('ping'),
+  openFolderDialog: () => ipcRenderer.invoke('openFolderDialog'),
+  getItemStats: (path: string) => ipcRenderer.invoke('getItemStats', path),
+  getDirectoryTree: (path: string) => ipcRenderer.invoke('getDirectoryTree', path),
+  readDirectoryContent: (path: string) => ipcRenderer.invoke('readDirectoryContent', path),
+})
