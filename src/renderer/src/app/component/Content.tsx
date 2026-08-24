@@ -16,9 +16,10 @@ import { FileDetailItem } from "./Tree";
 
 interface ContentProps {
   files: FileDetailItem[];
+  selectedFileId?: string;
+  onSelectFile: (file: FileDetailItem) => void;
 }
 
-// Форматирование размера файлов (байты -> КБ / МБ / ГБ)
 const formatFileSize = (bytes?: number): string => {
   if (bytes === undefined || bytes === 0) return "--";
   const k = 1024;
@@ -27,7 +28,6 @@ const formatFileSize = (bytes?: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 };
 
-// Форматирование даты
 const formatDate = (dateInput?: Date): string => {
   if (!dateInput) return "--";
   const date = new Date(dateInput);
@@ -40,7 +40,11 @@ const formatDate = (dateInput?: Date): string => {
   });
 };
 
-export const Content: React.FC<ContentProps> = ({ files }) => {
+export const Content: React.FC<ContentProps> = ({
+  files,
+  selectedFileId,
+  onSelectFile,
+}) => {
   if (!files || files.length === 0) {
     return (
       <Box
@@ -61,7 +65,7 @@ export const Content: React.FC<ContentProps> = ({ files }) => {
   }
 
   return (
-    <Box sx={{ flexGrow: 1, height: "100%", p: 2, overflowY: "auto" }}>
+    <Box sx={{ flexGrow: 1, height: "100%", p: 2, overflowY: "auto", boxSizing: "border-box" }}>
       <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: "divider" }}>
         <Table size="small" stickyHeader>
           <TableHead>
@@ -73,55 +77,60 @@ export const Content: React.FC<ContentProps> = ({ files }) => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {files.map((item) => (
-              <TableRow
-                key={item.id}
-                hover
-                sx={{
-                  cursor: "pointer",
-                  "&:last-child td, &:last-child th": { border: 0 },
-                }}
-              >
-                {/* Имя + Иконка */}
-                <TableCell component="th" scope="row">
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    {item.type === "directory" ? (
-                      <FolderIcon fontSize="small" color="primary" />
-                    ) : (
-                      <InsertDriveFileIcon fontSize="small" color="action" />
-                    )}
-                    <Typography variant="body2" noWrap>
-                      {item.name}
+            {files.map((item) => {
+              const isSelected = item.id === selectedFileId;
+              return (
+                <TableRow
+                  key={item.id}
+                  hover
+                  selected={isSelected}
+                  onClick={() => onSelectFile(item)}
+                  sx={{
+                    cursor: "pointer",
+                    "&:last-child td, &:last-child th": { border: 0 },
+                  }}
+                >
+                  {/* Имя + Иконка */}
+                  <TableCell component="th" scope="row">
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      {item.type === "directory" ? (
+                        <FolderIcon fontSize="small" color="primary" />
+                      ) : (
+                        <InsertDriveFileIcon fontSize="small" color="action" />
+                      )}
+                      <Typography variant="body2" noWrap>
+                        {item.name}
+                      </Typography>
+                    </Box>
+                  </TableCell>
+
+                  {/* Дата изменения */}
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary">
+                      {formatDate(item.stats?.updatedAt)}
                     </Typography>
-                  </Box>
-                </TableCell>
+                  </TableCell>
 
-                {/* Дата изменения */}
-                <TableCell>
-                  <Typography variant="body2" color="text.secondary">
-                    {formatDate(item.stats?.updatedAt)}
-                  </Typography>
-                </TableCell>
+                  {/* Тип */}
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary">
+                      {item.type === "directory"
+                        ? "Папка"
+                        : item.stats?.extension
+                        ? `${item.stats.extension.toUpperCase()} файл`
+                        : "Файл"}
+                    </Typography>
+                  </TableCell>
 
-                {/* Тип */}
-                <TableCell>
-                  <Typography variant="body2" color="text.secondary">
-                    {item.type === "directory"
-                      ? "Папка"
-                      : item.stats?.extension
-                      ? `${item.stats.extension.toUpperCase()} файл`
-                      : "Файл"}
-                  </Typography>
-                </TableCell>
-
-                {/* Размер */}
-                <TableCell align="right">
-                  <Typography variant="body2" color="text.secondary">
-                    {item.type === "directory" ? "--" : formatFileSize(item.stats?.size)}
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            ))}
+                  {/* Размер */}
+                  <TableCell align="right">
+                    <Typography variant="body2" color="text.secondary">
+                      {item.type === "directory" ? "--" : formatFileSize(item.stats?.size)}
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </TableContainer>

@@ -4,29 +4,43 @@ import { Tree, FileDetailItem } from "./component/Tree";
 import { Content } from "./component/Content";
 import { Preview } from "./component/Preview";
 
-// @ts-ignore
 export default function App(): JSX.Element {
   const [files, setFiles] = useState<FileDetailItem[]>([]);
+  const [selectedFile, setSelectedFile] = useState<FileDetailItem | null>(null);
+
+  const handleFilesChange = (newFiles: FileDetailItem[]) => {
+    setFiles(newFiles);
+    setSelectedFile(null); // Сбрасываем выбранный файл при выборе новой папки
+  };
 
   return (
     <Container
+      maxWidth={false}
+      disableGutters
       sx={{
         display: "flex",
         flexDirection: "row",
-        justifyContent: "space-between",
         height: "100vh",
-        py: 2,
+        p: 2,
+        boxSizing: "border-box",
       }}
     >
-      <Tree onFilesChange={setFiles} />
+      {/* Левая панель — Дерево */}
+      <Tree onFilesChange={handleFilesChange} />
 
       <Divider orientation="vertical" flexItem />
 
-      <Content files={files} />
+      {/* Центральная панель — Список файлов */}
+      <Content
+        files={files}
+        selectedFileId={selectedFile?.id}
+        onSelectFile={setSelectedFile}
+      />
 
       <Divider orientation="vertical" flexItem />
 
-      <Preview />
+      {/* Правая панель — Предпросмотр */}
+      <Preview file={selectedFile} />
     </Container>
   );
 }

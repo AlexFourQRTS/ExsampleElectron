@@ -57,6 +57,7 @@ declare global {
       getItemStats: (path: string) => Promise<FileItemStats>;
       getOnlyDirectoriesTree: (path: string) => Promise<FileTreeNode>;
       getFolderFiles: (path: string) => Promise<FileTreeNode[]>;
+      readFileText: (path: string) => Promise<string>;
     };
   }
 }
@@ -143,12 +144,10 @@ export const Tree: React.FC<TreeProps> = ({ onFilesChange }) => {
   const [treeData, setTreeData] = useState<FileTreeNode | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
-  // Загрузка списка файлов + их метаданных при выборе папки
   const handleSelectFolder = async (folderPath: string) => {
     try {
       const items = await window.api.getFolderFiles(folderPath);
 
-      // Получаем размеры и даты для каждого файла/папки
       const itemsWithStats = await Promise.all(
         items.map(async (item) => {
           try {
@@ -160,7 +159,6 @@ export const Tree: React.FC<TreeProps> = ({ onFilesChange }) => {
         })
       );
 
-      // Отправляем файлы в родительский App
       onFilesChange(itemsWithStats);
     } catch (error) {
       console.error("Ошибка при получении файлов:", error);
@@ -177,7 +175,6 @@ export const Tree: React.FC<TreeProps> = ({ onFilesChange }) => {
       const tree = await window.api.getOnlyDirectoriesTree(folderPath);
       setTreeData(tree);
 
-      // Загружаем файлы для корневой папки
       await handleSelectFolder(folderPath);
     } catch (error) {
       console.error("Ошибка при загрузке дерева:", error);
@@ -197,6 +194,7 @@ export const Tree: React.FC<TreeProps> = ({ onFilesChange }) => {
         height: "100%",
         userSelect: "none",
         p: 1.5,
+        boxSizing: "border-box",
       }}
     >
       <Box

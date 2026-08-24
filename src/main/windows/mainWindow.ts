@@ -10,10 +10,13 @@ export function createMainWindow(): BrowserWindow {
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      webSecurity: false,
     }
   })
 
+  mainWindow.webContents.openDevTools();
+  
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
   })
