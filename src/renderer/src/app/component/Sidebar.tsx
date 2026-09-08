@@ -24,6 +24,7 @@ import StarIcon from "@mui/icons-material/Star";
 import StarBorderIcon from "@mui/icons-material/StarBorder";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
+import EjectIcon from "@mui/icons-material/Eject";
 import { Tree, FileDetailItem } from "./Tree";
 import { BookmarksService, Bookmark } from "@services";
 import { AppBoxTree } from "../style/AppStyle";
@@ -52,6 +53,8 @@ interface SidebarEntry {
   label: string;
   path: string;
   icon: React.ReactNode;
+  // Только для устройств, которые можно отмонтировать (не для корня / Places)
+  devicePath?: string;
 }
 
 const bookmarksService = new BookmarksService();
@@ -103,11 +106,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label: d.label,
           path: d.mountPoint,
           icon: <UsbIcon fontSize="small" />,
+          devicePath: d.devicePath,
         })),
       ];
       setDevices(entries);
     } catch (error) {
       console.error("Ошибка при загрузке устройств:", error);
+    }
+  };
+
+  const handleUnmount = async (device: SidebarEntry) => {
+    if (!device.devicePath) return;
+
+    try {
+      await window.api.unmountDevice(device.devicePath);
+
+      // Если сейчас открыта папка на отмонтированном диске — уходим на Домашнюю,
+      // иначе останемся смотреть на путь, которого больше не существует
+      if (currentPath && currentPath.startsWith(device.path)) {
+        const home = await window.api.getHomeDirectory();
+        onOpenFolder(home);
+      }
+
+      loadDevices();
+    } catch (error) {
+      console.error("Ошибка при отмонтировании устройства:", error);
+      alert(`Не удалось отмонтировать: ${error}`);
     }
   };
 
@@ -128,7 +152,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const isCurrentBookmarked = currentPath ? bookmarksService.isBookmarked(currentPath) : false;
 
-  const renderEntry = (entry: SidebarEntry, onRemove?: () => void) => {
+  const renderEntry = (
+    entry: SidebarEntry,
+    onRemove?: () => void,
+    action?: { icon: React.ReactNode; title: string; onClick: () => void }
+  ) => {
     const isActive = currentPath === entry.path;
 
     return (
@@ -141,7 +169,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           py: 0.4,
           minHeight: 30,
           borderRadius: 1,
-          "&:hover .bookmark-remove": { opacity: 1 },
+          "&:hover .sidebar-action": { opacity: 1 },
         }}
       >
         <ListItemIcon sx={{ minWidth: 28 }}>{entry.icon}</ListItemIcon>
@@ -149,10 +177,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
           primary={entry.label}
           primaryTypographyProps={{ variant: "body2", noWrap: true, fontSize: "0.85rem" }}
         />
+        {action && (
+          <Tooltip title={action.title}>
+            <IconButton
+              size="small"
+              className="sidebar-action"
+              onClick={(e) => {
+                e.stopPropagation();
+                action.onClick();
+              }}
+              sx={{ opacity: 0, transition: "opacity 0.15s", p: 0.3 }}
+            >
+              {action.icon}
+            </IconButton>
+          </Tooltip>
+        )}
         {onRemove && (
           <IconButton
             size="small"
-            className="bookmark-remove"
+            className="sidebar-action"
             onClick={(e) => {
               e.stopPropagation();
               onRemove();
@@ -236,7 +279,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
         Устройства
       </Typography>
       <List component="nav" disablePadding dense sx={{ mb: 1 }}>
-        {devices.map((device) => renderEntry(device))}
+        {devices.map((device) =>
+          renderEntry(
+            device,
+            undefined,
+            device.devicePath
+              ? {
+                  icon: <EjectIcon sx={{ fontSize: 16 }} />,
+                  title: "Отмонтировать",
+                  onClick: () => handleUnmount(device),
+                }
+              : undefined
+          )
+        )}
       </List>
 
       <Divider sx={{ my: 1 }} />

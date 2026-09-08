@@ -1,52 +1,24 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import { coreApi } from './core/core';
+import { folderApi } from './folder/folder';
+import { fileApi } from './file/file';
+import { clipboardApi } from './clipboard/clipboard';
+import { archiveApi } from './archive/archive';
+import { permissionsApi } from './permissions/permissions';
+import { sidebarApi } from './sidebar/sidebar';
+import { thumbnailApi } from './thumbnail/thumbnail';
+import { systemIntegrationApi } from './systemIntegration/systemIntegration';
 
 contextBridge.exposeInMainWorld('api', {
-  ping: () => ipcRenderer.invoke('ping'),
-  openFolderDialog: () => ipcRenderer.invoke('openFolderDialog'),
-  getItemStats: (path: string) => ipcRenderer.invoke('getItemStats', path),
-  getOnlyDirectoriesTree: (path: string) => ipcRenderer.invoke('getOnlyDirectoriesTree', path),
-  getFolderFiles: (path: string) => ipcRenderer.invoke('getFolderFiles', path),
-  readFileText: (path: string) => ipcRenderer.invoke('readFileText', path),
-  calculateFolderSize: (path: string) => ipcRenderer.invoke('calculateFolderSize', path),
-  countFolderFiles: (path: string) => ipcRenderer.invoke('countFolderFiles', path),
-  createFolder: (parentPath: string, folderName: string) => ipcRenderer.invoke('createFolder', parentPath, folderName),
-  createFile: (parentPath: string, fileName: string) => ipcRenderer.invoke('createFile', parentPath, fileName),
-  deleteItem: (path: string) => ipcRenderer.invoke('deleteItem', path),
-  renameItem: (oldPath: string, newName: string) => ipcRenderer.invoke('renameItem', oldPath, newName),
-  countHiddenFolders: (path: string) => ipcRenderer.invoke('countHiddenFolders', path),
-  getHiddenFolders: (path: string) => ipcRenderer.invoke('getHiddenFolders', path),
-  hideFolder: (path: string) => ipcRenderer.invoke('hideFolder', path),
-  showFolder: (path: string) => ipcRenderer.invoke('showFolder', path),
-  getHiddenFoldersList: () => ipcRenderer.invoke('getHiddenFoldersList'),
-  isFolderHidden: (path: string) => ipcRenderer.invoke('isFolderHidden', path),
-  getFolderFilesFiltered: (path: string) => ipcRenderer.invoke('getFolderFilesFiltered', path),
-  getOnlyDirectoriesTreeFiltered: (path: string) => ipcRenderer.invoke('getOnlyDirectoriesTreeFiltered', path),
-  getHomeDirectory: () => ipcRenderer.invoke('getHomeDirectory'),
-  registerAsDefaultFileManager: () => ipcRenderer.invoke('registerAsDefaultFileManager'),
-  generateSudoInstallCommand: () => ipcRenderer.invoke('generateSudoInstallCommand'),
-  openTerminalAt: (dirPath: string) => ipcRenderer.invoke('openTerminalAt', dirPath),
-  openWithSystem: (itemPath: string) => ipcRenderer.invoke('openWithSystem', itemPath),
-  showItemInFolder: (itemPath: string) => ipcRenderer.invoke('showItemInFolder', itemPath),
-  compressItems: (itemPaths: string[], outputPath: string) => ipcRenderer.invoke('compressItems', itemPaths, outputPath),
-  extractArchive: (archivePath: string, outputDir: string) => ipcRenderer.invoke('extractArchive', archivePath, outputDir),
-  isArchive: (filePath: string) => ipcRenderer.invoke('isArchive', filePath),
-  makeExecutable: (filePath: string) => ipcRenderer.invoke('makeExecutable', filePath),
-  setPermissions: (filePath: string, mode: string) => ipcRenderer.invoke('setPermissions', filePath, mode),
-  getPermissions: (filePath: string) => ipcRenderer.invoke('getPermissions', filePath),
-  clipboardCopy: (paths: string[]) => ipcRenderer.invoke('clipboardCopy', paths),
-  clipboardCut: (paths: string[]) => ipcRenderer.invoke('clipboardCut', paths),
-  clipboardPaste: (targetDir: string) => ipcRenderer.invoke('clipboardPaste', targetDir),
-  clipboardHasContent: () => ipcRenderer.invoke('clipboardHasContent'),
-  moveItem: (sourcePath: string, targetDir: string) => ipcRenderer.invoke('moveItem', sourcePath, targetDir),
-  moveItems: (sourcePaths: string[], targetDir: string) => ipcRenderer.invoke('moveItems', sourcePaths, targetDir),
-  openNewWindow: (path: string) => ipcRenderer.invoke('openNewWindow', path),
-  getStandardPlaces: () => ipcRenderer.invoke('getStandardPlaces'),
-  getMountedDevices: () => ipcRenderer.invoke('getMountedDevices'),
-  getRootDevice: () => ipcRenderer.invoke('getRootDevice'),
-  getCachedThumbnail: (filePath: string) => ipcRenderer.invoke('getCachedThumbnail', filePath),
-  saveThumbnail: (filePath: string, base64Data: string) => ipcRenderer.invoke('saveThumbnail', filePath, base64Data),
-  markThumbnailFailed: (filePath: string) => ipcRenderer.invoke('markThumbnailFailed', filePath),
-  isThumbnailFailed: (filePath: string) => ipcRenderer.invoke('isThumbnailFailed', filePath),
+  ...coreApi,
+  ...folderApi,
+  ...fileApi,
+  ...clipboardApi,
+  ...archiveApi,
+  ...permissionsApi,
+  ...sidebarApi,
+  ...thumbnailApi,
+  ...systemIntegrationApi,
 });
 
 contextBridge.exposeInMainWorld('electron', {

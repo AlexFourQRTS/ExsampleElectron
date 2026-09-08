@@ -2,7 +2,7 @@ import { app, BrowserWindow } from 'electron'
 import { createMainWindow } from './windows/mainWindow'
 import { WindowManagerService } from './windows/windowManagerService'
 import { setupIpcHandlers } from './ipc'
-import { AppService } from './execution/appService'
+import { AppService } from './services/core/appService'
 
 // Не даём запускать несколько экземпляров приложения: система при открытии
 // папки через "проводник по умолчанию" запускает новый процесс — мы должны

@@ -1,11 +1,18 @@
 import * as fs from 'fs/promises'
 import * as os from 'os'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
+
+const execFileAsync = promisify(execFile)
 
 export interface MountedDevice {
   id: string
   label: string
   mountPoint: string
   filesystem: string
+  // Блочное устройство (например /dev/sdb1) — нужно для отмонтирования через
+  // udisksctl, который работает по устройству, а не по точке монтирования
+  devicePath: string
 }
 
 // Файловые системы, которые считаем "реальными" устройствами/дисками
@@ -49,6 +56,7 @@ export class DeviceService {
           label: this.labelFromMountPoint(mountPoint, source),
           mountPoint,
           filesystem,
+          devicePath: source,
         })
       }
 
@@ -60,7 +68,30 @@ export class DeviceService {
 
   // Отдельно даём доступ к корню файловой системы ("Компьютер" / "/")
   static getRootDevice(): MountedDevice {
-    return { id: 'root', label: 'Файловая система', mountPoint: '/', filesystem: 'root' }
+    return { id: 'root', label: 'Файловая система', mountPoint: '/', filesystem: 'root', devicePath: '' }
+  }
+
+  // Отмонтирует диск через udisksctl (не требует sudo для дисков, смонтированных
+  // самим пользователем/автомонтированием DE — стандартный случай для USB) —
+  // с fallback на обычный umount, если udisksctl недоступен
+  static async unmountDevice(devicePath: string): Promise<void> {
+    if (!devicePath) {
+      throw new Error('Не указано устройство для отмонтирования')
+    }
+
+    try {
+      await execFileAsync('udisksctl', ['unmount', '-b', devicePath])
+      return
+    } catch (udisksError: any) {
+      try {
+        await execFileAsync('umount', [devicePath])
+      } catch (umountError: any) {
+        throw new Error(
+          `Не удалось отмонтировать: ${udisksError.message || udisksError}. ` +
+            `umount тоже не сработал: ${umountError.message || umountError}`
+        )
+      }
+    }
   }
 
   private static unescapeMountPoint(raw: string): string {
