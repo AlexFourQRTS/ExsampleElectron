@@ -41,10 +41,13 @@ const ContextMenuList: React.FC<{ context: "item" | "empty" }> = ({ context }) =
 
   const refresh = () => setItems(configService.getItemsForContext(context));
 
+  const isEnabled = (item: ContextMenuItem): boolean =>
+    context === "empty" ? item.enabledForEmpty : item.enabledForItem;
+
   const handleToggle = (itemId: string) => {
     const item = items.find((i) => i.id === itemId);
     if (!item) return;
-    configService.toggleItem(itemId, !item.enabled);
+    configService.toggleItem(itemId, !isEnabled(item), context);
     refresh();
   };
 
@@ -81,7 +84,7 @@ const ContextMenuList: React.FC<{ context: "item" | "empty" }> = ({ context }) =
             {item.type !== "divider" && (
               <Checkbox
                 edge="start"
-                checked={item.enabled}
+                checked={isEnabled(item)}
                 onChange={() => handleToggle(item.id)}
                 tabIndex={-1}
                 disableRipple
@@ -94,7 +97,7 @@ const ContextMenuList: React.FC<{ context: "item" | "empty" }> = ({ context }) =
               primaryTypographyProps={{
                 variant: "body2",
                 sx: {
-                  opacity: item.enabled ? 1 : 0.6,
+                  opacity: isEnabled(item) ? 1 : 0.6,
                   fontStyle: item.label ? "normal" : "italic",
                 },
               }}

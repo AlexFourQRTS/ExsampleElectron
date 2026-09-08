@@ -280,6 +280,78 @@ export const Content: React.FC<ContentProps> = ({
     }
   };
 
+  // Кликабельные хлебные крошки в адресной строке: клик по любому сегменту,
+  // кроме последнего (текущая папка), сразу переходит в эту папку
+  const renderBreadcrumbs = () => {
+    if (!currentPath) {
+      return (
+        <Typography variant="body2" color="text.secondary">
+          Папка не выбрана
+        </Typography>
+      );
+    }
+
+    const isAbsolute = currentPath.startsWith("/");
+    const segments = currentPath.replace(/\\/g, "/").split("/").filter(Boolean);
+
+    let accumulated = "";
+
+    return (
+      <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", minWidth: 0 }}>
+        {isAbsolute && (
+          <Typography
+            component="span"
+            variant="body2"
+            onClick={() => onOpenFolder("/")}
+            sx={{
+              fontFamily: "monospace",
+              fontWeight: 500,
+              cursor: "pointer",
+              px: 0.25,
+              borderRadius: 0.5,
+              "&:hover": { textDecoration: "underline", color: "primary.main" },
+            }}
+          >
+            /
+          </Typography>
+        )}
+
+        {segments.map((segment, index) => {
+          accumulated += "/" + segment;
+          const segmentPath = accumulated;
+          const isLast = index === segments.length - 1;
+
+          return (
+            <Box key={segmentPath} sx={{ display: "flex", alignItems: "center" }}>
+              <Typography
+                component="span"
+                variant="body2"
+                onClick={() => !isLast && onOpenFolder(segmentPath)}
+                sx={{
+                  fontFamily: "monospace",
+                  fontWeight: isLast ? 600 : 500,
+                  cursor: isLast ? "default" : "pointer",
+                  px: 0.25,
+                  borderRadius: 0.5,
+                  ...(!isLast && {
+                    "&:hover": { textDecoration: "underline", color: "primary.main" },
+                  }),
+                }}
+              >
+                {segment}
+              </Typography>
+              {!isLast && (
+                <Typography component="span" variant="body2" color="text.secondary">
+                  /
+                </Typography>
+              )}
+            </Box>
+          );
+        })}
+      </Box>
+    );
+  };
+
   return (
     <Box
       sx={{
@@ -309,20 +381,11 @@ export const Content: React.FC<ContentProps> = ({
         <Typography
           variant="caption"
           color="text.secondary"
-          sx={{ fontWeight: 600 }}
+          sx={{ fontWeight: 600, flexShrink: 0 }}
         >
           Путь:
         </Typography>
-        <Typography
-          variant="body2"
-          sx={{
-            fontFamily: "monospace",
-            wordBreak: "break-all",
-            fontWeight: 500,
-          }}
-        >
-          {currentPath || "Папка не выбрана"}
-        </Typography>
+        {renderBreadcrumbs()}
       </Box>
 
       {/* Отрисовка контента */}
