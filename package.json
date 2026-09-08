@@ -1,9 +1,9 @@
 {
-  "name": "electron-example",
+  "name": "simple-explorer",
   "version": "1.0.0",
-  "description": "Electron + React + MUI App",
+  "description": "SimpleExplorer — a Linux-first file manager built with Electron + React + MUI, focused on the small daily annoyances mainstream file managers ignore (one-click chmod +x, always-visible folder size, a real customizable context menu).",
   "main": "./out/main/index.js",
-  "author": "Jane Doe",
+  "author": "Maliuk Oleksandr (Brahma / BrahmaDzen)",
   "license": "MIT",
   "scripts": {
     "dev": "electron-vite dev",
@@ -36,14 +36,15 @@
     "vitest": "^2.0.5"
   },
   "build": {
-    "appId": "com.example.electronreact",
-    "productName": "Electron Example",
+    "appId": "com.brahma.simpleexplorer",
+    "productName": "SimpleExplorer",
     "directories": {
       "output": "dist"
     },
     "files": [
       "out/**/*"
     ],
+    "electronLanguages": ["ru", "en-US", "en"],
     "mac": {
       "target": ["dmg", "zip"],
       "category": "public.app-category.utilities"

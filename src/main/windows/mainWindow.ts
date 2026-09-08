@@ -1,11 +1,16 @@
 import { BrowserWindow } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
+import { WindowStateService } from './windowStateService'
 
 export function createMainWindow(initialPath?: string): BrowserWindow {
+  const savedState = WindowStateService.load()
+
   const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+    width: savedState.width,
+    height: savedState.height,
+    x: savedState.x,
+    y: savedState.y,
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
@@ -15,7 +20,11 @@ export function createMainWindow(initialPath?: string): BrowserWindow {
     }
   })
 
-  mainWindow.webContents.openDevTools();
+  if (savedState.isMaximized) {
+    mainWindow.maximize()
+  }
+
+  WindowStateService.track(mainWindow)
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()

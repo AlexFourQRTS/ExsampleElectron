@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('api', {
   getOnlyDirectoriesTreeFiltered: (path: string) => ipcRenderer.invoke('getOnlyDirectoriesTreeFiltered', path),
   getHomeDirectory: () => ipcRenderer.invoke('getHomeDirectory'),
   registerAsDefaultFileManager: () => ipcRenderer.invoke('registerAsDefaultFileManager'),
+  generateSudoInstallCommand: () => ipcRenderer.invoke('generateSudoInstallCommand'),
   openTerminalAt: (dirPath: string) => ipcRenderer.invoke('openTerminalAt', dirPath),
   openWithSystem: (itemPath: string) => ipcRenderer.invoke('openWithSystem', itemPath),
   showItemInFolder: (itemPath: string) => ipcRenderer.invoke('showItemInFolder', itemPath),
@@ -39,6 +40,13 @@ contextBridge.exposeInMainWorld('api', {
   moveItem: (sourcePath: string, targetDir: string) => ipcRenderer.invoke('moveItem', sourcePath, targetDir),
   moveItems: (sourcePaths: string[], targetDir: string) => ipcRenderer.invoke('moveItems', sourcePaths, targetDir),
   openNewWindow: (path: string) => ipcRenderer.invoke('openNewWindow', path),
+  getStandardPlaces: () => ipcRenderer.invoke('getStandardPlaces'),
+  getMountedDevices: () => ipcRenderer.invoke('getMountedDevices'),
+  getRootDevice: () => ipcRenderer.invoke('getRootDevice'),
+  getCachedThumbnail: (filePath: string) => ipcRenderer.invoke('getCachedThumbnail', filePath),
+  saveThumbnail: (filePath: string, base64Data: string) => ipcRenderer.invoke('saveThumbnail', filePath, base64Data),
+  markThumbnailFailed: (filePath: string) => ipcRenderer.invoke('markThumbnailFailed', filePath),
+  isThumbnailFailed: (filePath: string) => ipcRenderer.invoke('isThumbnailFailed', filePath),
 });
 
 contextBridge.exposeInMainWorld('electron', {

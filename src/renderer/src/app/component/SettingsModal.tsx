@@ -23,6 +23,9 @@ import AddIcon from "@mui/icons-material/Add";
 import SettingsIcon from "@mui/icons-material/Settings";
 import MenuIcon from "@mui/icons-material/Menu";
 import LinkIcon from "@mui/icons-material/Link";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import CheckIcon from "@mui/icons-material/Check";
+import TerminalIcon from "@mui/icons-material/Terminal";
 import { ContextMenuSettings } from "@components/ContextMenuSettings";
 import { FileAssociationSettings } from "@components/FileAssociationSettings";
 import "../types/api";
@@ -50,6 +53,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [useAsDefault, setUseAsDefault] = useState(false);
   const [platform, setPlatform] = useState<"linux" | "darwin" | "win32">("linux");
   const [tabValue, setTabValue] = useState(0);
+  const [defaultResultOpen, setDefaultResultOpen] = useState(false);
+  const [defaultResultLog, setDefaultResultLog] = useState("");
+  const [defaultResultError, setDefaultResultError] = useState(false);
+  const [sudoCommand, setSudoCommand] = useState("");
+  const [sudoCopied, setSudoCopied] = useState(false);
 
   useEffect(() => {
     detectPlatform();
@@ -58,8 +66,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   useEffect(() => {
     if (open) {
       loadSettings();
+      window.api
+        .generateSudoInstallCommand()
+        .then(setSudoCommand)
+        .catch((error) => console.error("Ошибка при генерации sudo-команды:", error));
     }
   }, [open]);
+
+  const handleCopySudoCommand = async () => {
+    try {
+      await navigator.clipboard.writeText(sudoCommand);
+      setSudoCopied(true);
+      setTimeout(() => setSudoCopied(false), 2000);
+    } catch (error) {
+      console.error("Ошибка при копировании команды:", error);
+    }
+  };
 
   const detectPlatform = () => {
     const platformStr = (window.navigator.platform || "").toLowerCase();
@@ -114,12 +136,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const setAsDefaultFileManager = async () => {
+    setDefaultResultOpen(true);
+    setDefaultResultError(false);
+    setDefaultResultLog("Выполняется регистрация...");
+
     try {
-      await window.api.registerAsDefaultFileManager();
-      console.log("Приложение установлено как обработчик папок по умолчанию!");
-    } catch (error) {
-      console.error("Ошибка при установке по умолчанию:", error);
-      alert("Ошибка при установке приложения как обработчика папок");
+      const log = await window.api.registerAsDefaultFileManager();
+      console.log("Результат регистрации по умолчанию:", log);
+      setDefaultResultLog(log);
+    } catch (error: any) {
+      const message = error?.message || String(error);
+      console.error("Ошибка при установке по умолчанию:", message);
+      setDefaultResultError(true);
+      setDefaultResultLog(message);
+      setUseAsDefault(false);
+      localStorage.setItem("explorer_use_as_default", "false");
     }
   };
 
@@ -219,14 +250,72 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     {platform === "linux"
-                      ? "Linux: используется xdg-open (требует конфигурация)"
+                      ? "Linux: регистрация через xdg-mime (.desktop файл). Работает не во всех окружениях — GNOME/Nautilus может игнорировать это."
                       : platform === "darwin"
-                      ? "macOS: требует системные настройки"
+                      ? "macOS: требуется утилита duti (brew install duti)"
                       : "Windows: требует системные настройки"}
                   </Typography>
                 </Box>
               }
             />
+
+            {platform === "linux" && sudoCommand && (
+              <Box sx={{ mt: 2 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                  <TerminalIcon fontSize="small" color="action" />
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    Альтернатива: команда для терминала (sudo)
+                  </Typography>
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                  Устанавливает .desktop файл в системную директорию — работает
+                  надёжнее кнопки выше, не зависит от прав пользователя
+                </Typography>
+
+                <Paper
+                  elevation={0}
+                  sx={{
+                    border: 1,
+                    borderColor: "divider",
+                    p: 1.5,
+                    backgroundColor: "action.hover",
+                    position: "relative",
+                  }}
+                >
+                  <Typography
+                    component="pre"
+                    variant="caption"
+                    sx={{
+                      fontFamily: "monospace",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-all",
+                      m: 0,
+                      pr: 4,
+                      display: "block",
+                    }}
+                  >
+                    {sudoCommand}
+                  </Typography>
+
+                  <IconButton
+                    size="small"
+                    onClick={handleCopySudoCommand}
+                    sx={{ position: "absolute", top: 6, right: 6 }}
+                  >
+                    {sudoCopied ? (
+                      <CheckIcon fontSize="small" color="success" />
+                    ) : (
+                      <ContentCopyIcon fontSize="small" />
+                    )}
+                  </IconButton>
+                </Paper>
+
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+                  Скопируй команду и вставь в терминал (Ctrl+Shift+V), нажми Enter,
+                  введи пароль sudo при запросе
+                </Typography>
+              </Box>
+            )}
           </Box>
           </Box>
         )}
@@ -241,6 +330,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       <DialogActions>
         <Button onClick={onClose}>Закрыть</Button>
       </DialogActions>
+
+      {/* Диалог результата регистрации по умолчанию */}
+      <Dialog open={defaultResultOpen} onClose={() => setDefaultResultOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {defaultResultError ? "Ошибка регистрации" : "Результат регистрации"}
+        </DialogTitle>
+        <DialogContent>
+          <Typography
+            component="pre"
+            variant="body2"
+            sx={{
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              fontFamily: "monospace",
+              fontSize: "0.8rem",
+              color: defaultResultError ? "error.main" : "text.primary",
+            }}
+          >
+            {defaultResultLog}
+          </Typography>
+
+          {!defaultResultError && platform === "linux" && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>
+              Если папки всё ещё открываются в старом проводнике: некоторые окружения
+              (GNOME/Nautilus) не читают xdg-mime для inode/directory и требуют смены
+              через Настройки → Приложения по умолчанию, либо через `gio mime inode/directory`.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDefaultResultOpen(false)}>Закрыть</Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 };

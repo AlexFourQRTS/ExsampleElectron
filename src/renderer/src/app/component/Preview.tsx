@@ -11,6 +11,7 @@ import {
 } from "@mui/material";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
 import { FileDetailItem } from "./Tree";
+import { IMAGE_EXTS, VIDEO_EXTS, AUDIO_EXTS, TEXT_EXTS, getCleanExtension, toFileUrl } from "../utils/fileTypes";
 import "../types/api";
 
 interface PreviewProps {
@@ -31,16 +32,6 @@ const formatDate = (dateInput?: Date): string => {
   return new Date(dateInput).toLocaleString("ru-RU");
 };
 
-// Расширенный список всех текстовых и код-файлов
-const TEXT_EXTS = [
-  "txt", "md", "log", "csv", "xml", "json", "yaml", "yml", "toml", "env", "ini", "conf",
-  "html", "css", "scss", "sass", "less", "js", "ts", "jsx", "tsx", "vue", "svelte",
-  "py", "sh", "bash", "php", "sql", "java", "cs", "cpp", "c", "h", "go", "rs", "rb"
-];
-const IMAGE_EXTS = ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico"];
-const VIDEO_EXTS = ["mp4", "webm", "ogg", "mov"];
-const AUDIO_EXTS = ["mp3", "wav", "ogg", "aac"];
-
 export const Preview: React.FC<PreviewProps> = ({ files, width = 340 }) => {
   const file = files.length === 1 ? files[0] : null;
   const [textContent, setTextContent] = useState<string | null>(null);
@@ -50,14 +41,7 @@ export const Preview: React.FC<PreviewProps> = ({ files, width = 340 }) => {
   const [folderFileCount, setFolderFileCount] = useState<number | null>(null);
   const [loadingFolderStats, setLoadingFolderStats] = useState(false);
 
-// Получаем расширение, гарантированно убирая точку и пробелы
-  const getCleanExt = (): string => {
-    if (!file) return "";
-    const raw = file.stats?.extension || file.name.split(".").pop() || "";
-    return raw.toLowerCase().replace(/^\./, "").trim();
-  };
-
-  const ext = getCleanExt();
+  const ext = file ? getCleanExtension(file.name, file.stats?.extension) : "";
 
   const isImage = IMAGE_EXTS.includes(ext);
   const isVideo = VIDEO_EXTS.includes(ext);
@@ -177,9 +161,7 @@ export const Preview: React.FC<PreviewProps> = ({ files, width = 340 }) => {
     );
   }
 
-  // Корректное формирование file:// URL с заменой Windows слэшей \ на /
-  const cleanPath = file.path.replace(/\\/g, "/");
-  const fileUrl = cleanPath.startsWith("/") ? `file://${cleanPath}` : `file:///${cleanPath}`;
+  const fileUrl = toFileUrl(file.path);
 
   return (
     <Box

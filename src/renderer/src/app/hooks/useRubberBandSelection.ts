@@ -16,6 +16,11 @@ export function useRubberBandSelection({ containerRef, onSelectionEnd }: UseRubb
   const [selectionRect, setSelectionRect] = useState<SelectionRect | null>(null);
   const startPoint = useRef<{ x: number; y: number } | null>(null);
   const isDragging = useRef(false);
+  // Дублируем текущий прямоугольник в ref: handleMouseUp регистрируется в
+  // window ОДИН раз за весь drag (в момент mousedown) и обязан видеть самое
+  // свежее значение на момент mouseup, а не то, что было в state при регистрации —
+  // state внутри useCallback-замыкания для этого не годится (stale closure)
+  const currentRectRef = useRef<SelectionRect | null>(null);
 
   const getRelativePoint = useCallback((clientX: number, clientY: number) => {
     const container = containerRef.current;
@@ -38,24 +43,26 @@ export function useRubberBandSelection({ containerRef, onSelectionEnd }: UseRubb
     (e: MouseEvent) => {
       if (!isDragging.current || !startPoint.current) return;
       const point = getRelativePoint(e.clientX, e.clientY);
-      setSelectionRect(buildRect(startPoint.current, point));
+      const rect = buildRect(startPoint.current, point);
+      currentRectRef.current = rect;
+      setSelectionRect(rect);
     },
     [getRelativePoint]
   );
 
   const handleMouseUp = useCallback(() => {
-    if (isDragging.current && selectionRect) {
-      // Игнорируем случайные клики (совсем маленький прямоугольник)
-      if (selectionRect.width > 4 || selectionRect.height > 4) {
-        onSelectionEnd(selectionRect);
-      }
+    const finalRect = currentRectRef.current;
+    // Игнорируем случайные клики (совсем маленький прямоугольник)
+    if (isDragging.current && finalRect && (finalRect.width > 4 || finalRect.height > 4)) {
+      onSelectionEnd(finalRect);
     }
     isDragging.current = false;
     startPoint.current = null;
+    currentRectRef.current = null;
     setSelectionRect(null);
     window.removeEventListener("mousemove", handleMouseMove);
     window.removeEventListener("mouseup", handleMouseUp);
-  }, [handleMouseMove, onSelectionEnd, selectionRect]);
+  }, [handleMouseMove, onSelectionEnd]);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -67,7 +74,9 @@ export function useRubberBandSelection({ containerRef, onSelectionEnd }: UseRubb
       const point = getRelativePoint(e.clientX, e.clientY);
       startPoint.current = point;
       isDragging.current = true;
-      setSelectionRect(buildRect(point, point));
+      const initialRect = buildRect(point, point);
+      currentRectRef.current = initialRect;
+      setSelectionRect(initialRect);
 
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);

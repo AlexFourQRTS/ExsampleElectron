@@ -1,11 +1,28 @@
-import React, { useState } from "react";
-import { Container, IconButton, Box, Tooltip, Typography, Button, CircularProgress } from "@mui/material";
+import React, { useState, useMemo } from "react";
+import { Container, IconButton, Box, Tooltip, Typography, Button, CircularProgress, ThemeProvider, CssBaseline, ToggleButtonGroup, ToggleButton } from "@mui/material";
 import SettingsIcon from "@mui/icons-material/Settings";
-import { Tree, FileDetailItem } from "./component/Tree";
+import DarkModeIcon from "@mui/icons-material/DarkMode";
+import LightModeIcon from "@mui/icons-material/LightMode";
+import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
+import TableRowsIcon from "@mui/icons-material/TableRows";
+import AppsIcon from "@mui/icons-material/Apps";
+import GridViewIcon from "@mui/icons-material/GridView";
+import SortIcon from "@mui/icons-material/Sort";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import CheckIcon from "@mui/icons-material/Check";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
+import ListItemIcon from "@mui/material/ListItemIcon";
+import ListItemText from "@mui/material/ListItemText";
+import { FileDetailItem } from "./component/Tree";
+import { Sidebar } from "./component/Sidebar";
 import { Content } from "./component/Content";
 import { Preview } from "./component/Preview";
 import { SettingsModal } from "./component/SettingsModal";
 import { ResizeHandle } from "./component/ResizeHandle";
+import { createAppTheme } from "./theme/theme";
+import { ThemeService, ThemeMode, ViewModeService, ViewMode, SortService, SortKey, SortDirection } from "@services";
 import "./types/api";
 
 const TREE_WIDTH_KEY = "explorer_tree_width";
@@ -13,11 +30,81 @@ const PREVIEW_WIDTH_KEY = "explorer_preview_width";
 const DEFAULT_TREE_WIDTH = 280;
 const DEFAULT_PREVIEW_WIDTH = 340;
 
+// Заметно крупные иконки для показать/скрыть панель — по просьбе пользователя
+// в разы больше обычных toolbar-иконок, чтобы сразу бросались в глаза
+const PANEL_TOGGLE_ICON_SIZE = 48;
+
+const SORT_LABELS: Record<SortKey, string> = {
+  name: "По алфавиту",
+  size: "По размеру",
+  type: "По типу",
+};
+
+const themeService = new ThemeService();
+const viewModeService = new ViewModeService();
+const sortService = new SortService();
+
 export default function App(): JSX.Element {
   const [files, setFiles] = useState<FileDetailItem[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<FileDetailItem[]>([]);
   const [currentPath, setCurrentPath] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => themeService.getMode());
+  const [viewMode, setViewMode] = useState<ViewMode>(() => viewModeService.getViewMode());
+  const [sidebarVisible, setSidebarVisible] = useState(() => viewModeService.isSidebarVisible());
+  const [previewVisible, setPreviewVisible] = useState(() => viewModeService.isPreviewVisible());
+
+  const theme = useMemo(() => createAppTheme(themeMode), [themeMode]);
+
+  const handleToggleTheme = () => {
+    setThemeMode(themeService.toggle());
+  };
+
+  const handleViewModeChange = (_: React.MouseEvent, newMode: ViewMode | null) => {
+    if (!newMode) return;
+    setViewMode(newMode);
+    viewModeService.setViewMode(newMode);
+  };
+
+  const handleToggleSidebar = () => {
+    setSidebarVisible((prev) => {
+      const next = !prev;
+      viewModeService.setSidebarVisible(next);
+      return next;
+    });
+  };
+
+  const handleTogglePreview = () => {
+    setPreviewVisible((prev) => {
+      const next = !prev;
+      viewModeService.setPreviewVisible(next);
+      return next;
+    });
+  };
+
+  const [sortKey, setSortKey] = useState<SortKey>(() => sortService.getSortKey());
+  const [sortDirection, setSortDirection] = useState<SortDirection>(() => sortService.getSortDirection());
+  const [sortMenuAnchor, setSortMenuAnchor] = useState<HTMLElement | null>(null);
+
+  const sortedFiles = useMemo(
+    () => sortService.sortFiles(files, sortKey, sortDirection),
+    [files, sortKey, sortDirection]
+  );
+
+  const handleSelectSortKey = (key: SortKey) => {
+    setSortKey(key);
+    sortService.setSortKey(key);
+    setSortMenuAnchor(null);
+  };
+
+  const handleToggleSortDirection = () => {
+    setSortDirection((prev) => {
+      const next: SortDirection = prev === "asc" ? "desc" : "asc";
+      sortService.setSortDirection(next);
+      return next;
+    });
+  };
+
   const [isLoading, setIsLoading] = useState(true);
   const [treeWidth, setTreeWidth] = useState<number>(() => {
     const saved = localStorage.getItem(TREE_WIDTH_KEY);
@@ -121,7 +208,8 @@ export default function App(): JSX.Element {
   };
 
   return (
-    <>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
       <Container
         maxWidth={false}
         disableGutters
@@ -154,18 +242,99 @@ export default function App(): JSX.Element {
             <Box
               sx={{
                 display: "flex",
-                justifyContent: "flex-end",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 1,
                 mb: 1,
               }}
             >
-              <Tooltip title="Настройки">
-                <IconButton
-                  onClick={() => setSettingsOpen(true)}
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Tooltip title={sidebarVisible ? "Скрыть боковую панель" : "Показать боковую панель"}>
+                  <IconButton onClick={handleToggleSidebar} color={sidebarVisible ? "primary" : "default"}>
+                    <ViewSidebarIcon sx={{ fontSize: PANEL_TOGGLE_ICON_SIZE }} />
+                  </IconButton>
+                </Tooltip>
+
+                <ToggleButtonGroup
+                  value={viewMode}
+                  exclusive
+                  onChange={handleViewModeChange}
                   size="small"
                 >
-                  <SettingsIcon />
-                </IconButton>
-              </Tooltip>
+                  <ToggleButton value="table">
+                    <Tooltip title="Таблица">
+                      <TableRowsIcon fontSize="small" />
+                    </Tooltip>
+                  </ToggleButton>
+                  <ToggleButton value="icons-small">
+                    <Tooltip title="Мелкие значки">
+                      <AppsIcon fontSize="small" />
+                    </Tooltip>
+                  </ToggleButton>
+                  <ToggleButton value="icons-medium">
+                    <Tooltip title="Средние значки">
+                      <GridViewIcon fontSize="small" />
+                    </Tooltip>
+                  </ToggleButton>
+                  <ToggleButton value="icons-large">
+                    <Tooltip title="Крупные значки (с предпросмотром фото)">
+                      <GridViewIcon fontSize="medium" />
+                    </Tooltip>
+                  </ToggleButton>
+                </ToggleButtonGroup>
+
+                <Tooltip title={`Сортировка: ${SORT_LABELS[sortKey]}`}>
+                  <IconButton size="small" onClick={(e) => setSortMenuAnchor(e.currentTarget)}>
+                    <SortIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+
+                <Tooltip title={sortDirection === "asc" ? "По возрастанию" : "По убыванию"}>
+                  <IconButton size="small" onClick={handleToggleSortDirection}>
+                    {sortDirection === "asc" ? (
+                      <ArrowUpwardIcon fontSize="small" />
+                    ) : (
+                      <ArrowDownwardIcon fontSize="small" />
+                    )}
+                  </IconButton>
+                </Tooltip>
+
+                <Menu
+                  anchorEl={sortMenuAnchor}
+                  open={!!sortMenuAnchor}
+                  onClose={() => setSortMenuAnchor(null)}
+                >
+                  {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
+                    <MenuItem key={key} onClick={() => handleSelectSortKey(key)}>
+                      <ListItemIcon>
+                        {sortKey === key ? <CheckIcon fontSize="small" /> : null}
+                      </ListItemIcon>
+                      <ListItemText>{SORT_LABELS[key]}</ListItemText>
+                    </MenuItem>
+                  ))}
+                </Menu>
+              </Box>
+
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Tooltip title={themeMode === "dark" ? "Светлая тема" : "Графитовая тема"}>
+                  <IconButton onClick={handleToggleTheme} size="small">
+                    {themeMode === "dark" ? <LightModeIcon /> : <DarkModeIcon />}
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Настройки">
+                  <IconButton
+                    onClick={() => setSettingsOpen(true)}
+                    size="small"
+                  >
+                    <SettingsIcon />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title={previewVisible ? "Скрыть панель предпросмотра" : "Показать панель предпросмотра"}>
+                  <IconButton onClick={handleTogglePreview} color={previewVisible ? "primary" : "default"}>
+                    <ViewSidebarIcon sx={{ fontSize: PANEL_TOGGLE_ICON_SIZE, transform: "scaleX(-1)" }} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
             </Box>
 
             {!currentPath ? (
@@ -205,29 +374,39 @@ export default function App(): JSX.Element {
               overflow: "hidden",
             }}
           >
-            <Tree
-              onFilesChange={(newFiles) => {
-                handleFilesChange(newFiles);
-              }}
-              onFolderSelect={setCurrentPath}
-              width={treeWidth}
-            />
+            {sidebarVisible && (
+              <>
+                <Sidebar
+                  currentPath={currentPath}
+                  onFilesChange={(newFiles) => {
+                    handleFilesChange(newFiles);
+                  }}
+                  onFolderSelect={setCurrentPath}
+                  onOpenFolder={handleOpenFolder}
+                  width={treeWidth}
+                />
 
-            <ResizeHandle onResize={handleTreeResize} />
+                <ResizeHandle onResize={handleTreeResize} />
+              </>
+            )}
 
             <Content
-              files={files}
+              files={sortedFiles}
               currentPath={currentPath}
               selectedFiles={selectedFiles}
               onSelectionChange={setSelectedFiles}
               onOpenFolder={handleOpenFolder}
               onGoBack={handleGoBack}
               onRefresh={handleRefresh}
+              viewMode={viewMode}
             />
 
-            <ResizeHandle onResize={handlePreviewResize} />
-
-            <Preview files={selectedFiles} width={previewWidth} />
+            {previewVisible && (
+              <>
+                <ResizeHandle onResize={handlePreviewResize} />
+                <Preview files={selectedFiles} width={previewWidth} />
+              </>
+            )}
           </Box>
             )}
           </>
@@ -238,6 +417,6 @@ export default function App(): JSX.Element {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
       />
-    </>
+    </ThemeProvider>
   );
 }

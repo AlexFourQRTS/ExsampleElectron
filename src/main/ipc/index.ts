@@ -6,6 +6,9 @@ import { PermissionsService } from "../execution/permissionsService";
 import { ClipboardFileService } from "../execution/clipboardFileService";
 import { MoveService } from "../execution/moveService";
 import { WindowManagerService } from "../windows/windowManagerService";
+import { UserDirsService } from "../execution/userDirsService";
+import { DeviceService } from "../execution/deviceService";
+import { ThumbnailService } from "../execution/thumbnailService";
 import fs from "fs/promises";
 
 export function setupIpcHandlers(): void {
@@ -152,6 +155,10 @@ export function setupIpcHandlers(): void {
     async () => await AppService.registerAsDefaultFileManager(),
   );
 
+  ipcMain.handle("generateSudoInstallCommand", () =>
+    AppService.generateSudoInstallCommand(),
+  );
+
   // Терминал
   ipcMain.handle("openTerminalAt", (_, dirPath: string) => {
     TerminalService.openTerminalAt(dirPath);
@@ -234,4 +241,33 @@ export function setupIpcHandlers(): void {
   ipcMain.handle("openNewWindow", (_, path: string) => {
     WindowManagerService.openNewWindow(path);
   });
+
+  // Боковая панель: стандартные "Места" и примонтированные устройства
+  ipcMain.handle("getStandardPlaces", async () => await UserDirsService.getStandardPlaces());
+
+  ipcMain.handle("getMountedDevices", async () => await DeviceService.getMountedDevices());
+
+  ipcMain.handle("getRootDevice", () => DeviceService.getRootDevice());
+
+  // Кэш миниатюр фото/видео
+  ipcMain.handle(
+    "getCachedThumbnail",
+    async (_, filePath: string) => await ThumbnailService.getCachedThumbnailPath(filePath),
+  );
+
+  ipcMain.handle(
+    "saveThumbnail",
+    async (_, filePath: string, base64Data: string) =>
+      await ThumbnailService.saveThumbnail(filePath, base64Data),
+  );
+
+  ipcMain.handle(
+    "markThumbnailFailed",
+    async (_, filePath: string) => await ThumbnailService.markAsFailed(filePath),
+  );
+
+  ipcMain.handle(
+    "isThumbnailFailed",
+    async (_, filePath: string) => await ThumbnailService.isMarkedAsFailed(filePath),
+  );
 }

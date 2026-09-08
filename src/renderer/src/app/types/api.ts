@@ -15,6 +15,20 @@ export interface FileTreeNode {
   children?: FileTreeNode[];
 }
 
+export interface StandardPlace {
+  id: string;
+  label: string;
+  path: string;
+  icon: string;
+}
+
+export interface MountedDevice {
+  id: string;
+  label: string;
+  mountPoint: string;
+  filesystem: string;
+}
+
 declare global {
   interface Window {
     api: {
@@ -39,7 +53,8 @@ declare global {
       isFolderHidden: (path: string) => Promise<boolean>;
       getFolderFilesFiltered: (path: string) => Promise<FileTreeNode[]>;
       getOnlyDirectoriesTreeFiltered: (path: string) => Promise<FileTreeNode>;
-      registerAsDefaultFileManager: () => Promise<void>;
+      registerAsDefaultFileManager: () => Promise<string>;
+      generateSudoInstallCommand: () => Promise<string>;
       openTerminalAt: (dirPath: string) => Promise<void>;
       openWithSystem: (itemPath: string) => Promise<void>;
       showItemInFolder: (itemPath: string) => Promise<void>;
@@ -56,6 +71,13 @@ declare global {
       moveItem: (sourcePath: string, targetDir: string) => Promise<string>;
       moveItems: (sourcePaths: string[], targetDir: string) => Promise<string[]>;
       openNewWindow: (path: string) => Promise<void>;
+      getStandardPlaces: () => Promise<StandardPlace[]>;
+      getMountedDevices: () => Promise<MountedDevice[]>;
+      getRootDevice: () => Promise<MountedDevice>;
+      getCachedThumbnail: (filePath: string) => Promise<string | null>;
+      saveThumbnail: (filePath: string, base64Data: string) => Promise<string>;
+      markThumbnailFailed: (filePath: string) => Promise<void>;
+      isThumbnailFailed: (filePath: string) => Promise<boolean>;
     };
   }
 }

@@ -19,7 +19,9 @@ import { FileDetailItem } from "./Tree";
 import { ContextMenu } from "./ContextMenu";
 import { ColumnResizeHandle } from "./ColumnResizeHandle";
 import { SelectionBox } from "./SelectionBox";
+import { IconGridView } from "./IconGridView";
 import { useRubberBandSelection, SelectionRect } from "../hooks/useRubberBandSelection";
+import { ViewMode } from "@services";
 import "../types/api";
 
 const COLUMN_WIDTHS_KEY = "explorer_column_widths";
@@ -56,6 +58,7 @@ interface ContentProps {
   onOpenFolder: (folderPath: string) => void;
   onGoBack: () => void;
   onRefresh?: () => void;
+  viewMode: ViewMode;
 }
 
 const formatFileSize = (bytes?: number): string => {
@@ -86,6 +89,7 @@ export const Content: React.FC<ContentProps> = ({
   onOpenFolder,
   onGoBack,
   onRefresh,
+  viewMode,
 }) => {
   const lastClickedIndex = React.useRef<number>(-1);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -276,6 +280,78 @@ export const Content: React.FC<ContentProps> = ({
     }
   };
 
+  // Кликабельные хлебные крошки в адресной строке: клик по любому сегменту,
+  // кроме последнего (текущая папка), сразу переходит в эту папку
+  const renderBreadcrumbs = () => {
+    if (!currentPath) {
+      return (
+        <Typography variant="body2" color="text.secondary">
+          Папка не выбрана
+        </Typography>
+      );
+    }
+
+    const isAbsolute = currentPath.startsWith("/");
+    const segments = currentPath.replace(/\\/g, "/").split("/").filter(Boolean);
+
+    let accumulated = "";
+
+    return (
+      <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", minWidth: 0 }}>
+        {isAbsolute && (
+          <Typography
+            component="span"
+            variant="body2"
+            onClick={() => onOpenFolder("/")}
+            sx={{
+              fontFamily: "monospace",
+              fontWeight: 500,
+              cursor: "pointer",
+              px: 0.25,
+              borderRadius: 0.5,
+              "&:hover": { textDecoration: "underline", color: "primary.main" },
+            }}
+          >
+            /
+          </Typography>
+        )}
+
+        {segments.map((segment, index) => {
+          accumulated += "/" + segment;
+          const segmentPath = accumulated;
+          const isLast = index === segments.length - 1;
+
+          return (
+            <Box key={segmentPath} sx={{ display: "flex", alignItems: "center" }}>
+              <Typography
+                component="span"
+                variant="body2"
+                onClick={() => !isLast && onOpenFolder(segmentPath)}
+                sx={{
+                  fontFamily: "monospace",
+                  fontWeight: isLast ? 600 : 500,
+                  cursor: isLast ? "default" : "pointer",
+                  px: 0.25,
+                  borderRadius: 0.5,
+                  ...(!isLast && {
+                    "&:hover": { textDecoration: "underline", color: "primary.main" },
+                  }),
+                }}
+              >
+                {segment}
+              </Typography>
+              {!isLast && (
+                <Typography component="span" variant="body2" color="text.secondary">
+                  /
+                </Typography>
+              )}
+            </Box>
+          );
+        })}
+      </Box>
+    );
+  };
+
   return (
     <Box
       sx={{
@@ -305,20 +381,11 @@ export const Content: React.FC<ContentProps> = ({
         <Typography
           variant="caption"
           color="text.secondary"
-          sx={{ fontWeight: 600 }}
+          sx={{ fontWeight: 600, flexShrink: 0 }}
         >
           Путь:
         </Typography>
-        <Typography
-          variant="body2"
-          sx={{
-            fontFamily: "monospace",
-            wordBreak: "break-all",
-            fontWeight: 500,
-          }}
-        >
-          {currentPath || "Папка не выбрана"}
-        </Typography>
+        {renderBreadcrumbs()}
       </Box>
 
       {/* Отрисовка контента */}
@@ -357,6 +424,26 @@ export const Content: React.FC<ContentProps> = ({
               </Button>
             )}
           </Box>
+        ) : viewMode !== "table" ? (
+          <IconGridView
+            files={files}
+            selectedFiles={selectedFiles}
+            size={viewMode}
+            dragOverPath={dragOverPath}
+            registerRef={(id, el) => {
+              if (el) rowRefs.current.set(id, el);
+              else rowRefs.current.delete(id);
+            }}
+            onSelectItem={handleSelectItem}
+            onContextMenu={handleContextMenu}
+            onDoubleClick={(item) => {
+              if (item.type === "directory") onOpenFolder(item.path);
+            }}
+            onDragStart={handleDragStart}
+            onDragOverItem={handleDragOverRow}
+            onDragLeaveItem={handleDragLeaveRow}
+            onDropItem={handleDropOnRow}
+          />
         ) : (
           <TableContainer
             component={Paper}
@@ -367,28 +454,49 @@ export const Content: React.FC<ContentProps> = ({
               <TableHead>
                 <TableRow>
                   <TableCell
-                    sx={{ fontWeight: 600, width: columnWidths.name, position: "relative", overflow: "hidden" }}
+                    sx={{
+                      fontWeight: 600,
+                      width: columnWidths.name,
+                      position: "relative",
+                      overflow: "hidden",
+                      borderRight: 1,
+                      borderRightColor: "divider",
+                    }}
                   >
-                    <Box sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Имя</Box>
+                    <Box sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Название</Box>
                     <ColumnResizeHandle onResize={(dx) => handleColumnResize("name", dx)} />
                   </TableCell>
                   <TableCell
-                    sx={{ fontWeight: 600, width: columnWidths.date, position: "relative", overflow: "hidden" }}
-                  >
-                    <Box sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Дата изменения</Box>
-                    <ColumnResizeHandle onResize={(dx) => handleColumnResize("date", dx)} />
-                  </TableCell>
-                  <TableCell
-                    sx={{ fontWeight: 600, width: columnWidths.type, position: "relative", overflow: "hidden" }}
+                    sx={{
+                      fontWeight: 600,
+                      width: columnWidths.type,
+                      position: "relative",
+                      overflow: "hidden",
+                      borderRight: 1,
+                      borderRightColor: "divider",
+                    }}
                   >
                     <Box sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Тип</Box>
                     <ColumnResizeHandle onResize={(dx) => handleColumnResize("type", dx)} />
                   </TableCell>
                   <TableCell
                     align="right"
-                    sx={{ fontWeight: 600, width: columnWidths.size, position: "relative", overflow: "hidden" }}
+                    sx={{
+                      fontWeight: 600,
+                      width: columnWidths.size,
+                      position: "relative",
+                      overflow: "hidden",
+                      borderRight: 1,
+                      borderRightColor: "divider",
+                    }}
                   >
                     <Box sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Размер</Box>
+                    <ColumnResizeHandle onResize={(dx) => handleColumnResize("size", dx)} />
+                  </TableCell>
+                  <TableCell
+                    sx={{ fontWeight: 600, width: columnWidths.date, position: "relative", overflow: "hidden" }}
+                  >
+                    <Box sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Дата изменения</Box>
                   </TableCell>
                 </TableRow>
               </TableHead>
@@ -476,7 +584,12 @@ export const Content: React.FC<ContentProps> = ({
                       <TableCell
                         component="th"
                         scope="row"
-                        sx={{ width: columnWidths.name, overflow: "hidden" }}
+                        sx={{
+                          width: columnWidths.name,
+                          overflow: "hidden",
+                          borderRight: 1,
+                          borderRightColor: "divider",
+                        }}
                       >
                         <Box
                           sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}
@@ -496,13 +609,14 @@ export const Content: React.FC<ContentProps> = ({
                         </Box>
                       </TableCell>
 
-                      <TableCell sx={{ width: columnWidths.date, overflow: "hidden" }}>
-                        <Typography variant="body2" color="text.secondary" noWrap>
-                          {formatDate(item.stats?.updatedAt)}
-                        </Typography>
-                      </TableCell>
-
-                      <TableCell sx={{ width: columnWidths.type, overflow: "hidden" }}>
+                      <TableCell
+                        sx={{
+                          width: columnWidths.type,
+                          overflow: "hidden",
+                          borderRight: 1,
+                          borderRightColor: "divider",
+                        }}
+                      >
                         <Typography variant="body2" color="text.secondary" noWrap>
                           {item.type === "directory"
                             ? "Папка"
@@ -512,7 +626,15 @@ export const Content: React.FC<ContentProps> = ({
                         </Typography>
                       </TableCell>
 
-                      <TableCell align="right" sx={{ width: columnWidths.size, overflow: "hidden" }}>
+                      <TableCell
+                        align="right"
+                        sx={{
+                          width: columnWidths.size,
+                          overflow: "hidden",
+                          borderRight: 1,
+                          borderRightColor: "divider",
+                        }}
+                      >
                         {item.type === "directory" ? (
                           isLoading ? (
                             <CircularProgress size={16} />
@@ -530,6 +652,12 @@ export const Content: React.FC<ContentProps> = ({
                             {formatFileSize(item.stats?.size)}
                           </Typography>
                         )}
+                      </TableCell>
+
+                      <TableCell sx={{ width: columnWidths.date, overflow: "hidden" }}>
+                        <Typography variant="body2" color="text.secondary" noWrap>
+                          {formatDate(item.stats?.updatedAt)}
+                        </Typography>
                       </TableCell>
                     </TableRow>
                   );
