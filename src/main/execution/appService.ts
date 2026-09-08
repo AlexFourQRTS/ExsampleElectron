@@ -452,7 +452,7 @@ export class AppService {
       const applicationsDir = path.join(homeDir, '.local/share/applications')
       await fs.mkdir(applicationsDir, { recursive: true })
 
-      const desktopFilePath = path.join(applicationsDir, 'electron-explorer.desktop')
+      const desktopFilePath = path.join(applicationsDir, 'simpleexplorer.desktop')
       const desktopContent = this.buildDesktopEntryContent(launch)
 
       await fs.writeFile(desktopFilePath, desktopContent, 'utf-8')
@@ -471,7 +471,7 @@ export class AppService {
       const mimeTypes = ['inode/directory', 'inode/mount-point']
       try {
         for (const mimeType of mimeTypes) {
-          execSync(`xdg-mime default electron-explorer.desktop ${mimeType}`, { stdio: 'pipe' })
+          execSync(`xdg-mime default simpleexplorer.desktop ${mimeType}`, { stdio: 'pipe' })
           log.push(`xdg-mime default ${mimeType} установлен`)
         }
       } catch (error: any) {
@@ -483,7 +483,7 @@ export class AppService {
       try {
         execSync('which gio', { stdio: 'pipe' })
         for (const mimeType of mimeTypes) {
-          execSync(`gio mime ${mimeType} electron-explorer.desktop`, { stdio: 'pipe' })
+          execSync(`gio mime ${mimeType} simpleexplorer.desktop`, { stdio: 'pipe' })
           log.push(`gio mime ${mimeType} установлен`)
         }
       } catch (error: any) {
@@ -498,7 +498,7 @@ export class AppService {
           .toString()
           .trim()
         log.push(`Текущий обработчик inode/directory: ${current}`)
-        if (current !== 'electron-explorer.desktop') {
+        if (current !== 'simpleexplorer.desktop') {
           log.push(
             'ВНИМАНИЕ: система не подтвердила смену обработчика. ' +
               'Некоторые окружения (GNOME/Nautilus) игнорируют xdg-mime для inode/directory ' +
@@ -518,7 +518,7 @@ export class AppService {
       }
 
       try {
-        execSync(`duti -s com.electron.explorer com.apple.bundle-identifier com.apple.Finder`, {
+        execSync(`duti -s com.brahma.simpleexplorer com.apple.bundle-identifier com.apple.Finder`, {
           stdio: 'pipe',
         })
         return 'Зарегистрировано через duti'
@@ -563,9 +563,9 @@ export class AppService {
       return resolved
     }
 
-    const destDir = path.join(os.homedir(), '.local/share/electron-explorer')
-    const dest = path.join(destDir, 'electron-explorer.AppImage')
-    const wrapper = path.join(destDir, 'electron-explorer')
+    const destDir = path.join(os.homedir(), '.local/share/simpleexplorer')
+    const dest = path.join(destDir, 'simpleexplorer.AppImage')
+    const wrapper = path.join(destDir, 'simpleexplorer')
     await fs.mkdir(destDir, { recursive: true })
     if (path.resolve(resolved.execPath) !== path.resolve(dest)) {
       await fs.copyFile(resolved.execPath, dest)
@@ -620,14 +620,14 @@ export class AppService {
 
     return `[Desktop Entry]
 Type=Application
-Name=Electron Explorer
+Name=SimpleExplorer
 Exec=${execLine}
 Icon=folder
 Categories=System;FileManager;Utility;
 MimeType=inode/directory;inode/mount-point;
 Terminal=false
 StartupNotify=true
-StartupWMClass=electron-example
+StartupWMClass=simpleexplorer
 `
   }
 
@@ -658,7 +658,7 @@ StartupWMClass=electron-example
 
         if (command === 'nemo' || /file manager|файлов|проводник/i.test(name)) {
           execSync(`gsettings set ${prefix} command ${JSON.stringify(execPath)}`)
-          log.push(`Cinnamon: горячая клавиша «${name}» теперь запускает Electron Explorer`)
+          log.push(`Cinnamon: горячая клавиша «${name}» теперь запускает SimpleExplorer`)
         }
       }
     } catch (error: any) {
@@ -678,16 +678,16 @@ StartupWMClass=electron-example
     const desktopContent = this.buildDesktopEntryContent()
 
     return [
-      `sudo tee /usr/share/applications/electron-explorer.desktop > /dev/null << 'EOF'`,
+      `sudo tee /usr/share/applications/simpleexplorer.desktop > /dev/null << 'EOF'`,
       desktopContent.trimEnd(),
       `EOF`,
       // update-desktop-database ДО gio mime — иначе gio не видит свежесозданный
       // .desktop файл и падает с "Failed to load info for handler"
       `sudo update-desktop-database /usr/share/applications`,
-      `sudo xdg-mime default electron-explorer.desktop inode/directory`,
-      `sudo xdg-mime default electron-explorer.desktop inode/mount-point`,
-      `command -v gio >/dev/null 2>&1 && gio mime inode/directory electron-explorer.desktop`,
-      `command -v gio >/dev/null 2>&1 && gio mime inode/mount-point electron-explorer.desktop`,
+      `sudo xdg-mime default simpleexplorer.desktop inode/directory`,
+      `sudo xdg-mime default simpleexplorer.desktop inode/mount-point`,
+      `command -v gio >/dev/null 2>&1 && gio mime inode/directory simpleexplorer.desktop`,
+      `command -v gio >/dev/null 2>&1 && gio mime inode/mount-point simpleexplorer.desktop`,
     ].join('\n')
   }
 
