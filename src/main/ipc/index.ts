@@ -6,6 +6,8 @@ import { PermissionsService } from "../execution/permissionsService";
 import { ClipboardFileService } from "../execution/clipboardFileService";
 import { MoveService } from "../execution/moveService";
 import { WindowManagerService } from "../windows/windowManagerService";
+import { UserDirsService } from "../execution/userDirsService";
+import { DeviceService } from "../execution/deviceService";
 import fs from "fs/promises";
 
 export function setupIpcHandlers(): void {
@@ -238,4 +240,11 @@ export function setupIpcHandlers(): void {
   ipcMain.handle("openNewWindow", (_, path: string) => {
     WindowManagerService.openNewWindow(path);
   });
+
+  // Боковая панель: стандартные "Места" и примонтированные устройства
+  ipcMain.handle("getStandardPlaces", async () => await UserDirsService.getStandardPlaces());
+
+  ipcMain.handle("getMountedDevices", async () => await DeviceService.getMountedDevices());
+
+  ipcMain.handle("getRootDevice", () => DeviceService.getRootDevice());
 }

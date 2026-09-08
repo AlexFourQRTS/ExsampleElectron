@@ -7,6 +7,8 @@ export { ContextMenuConfigService, DEFAULT_CONTEXT_MENU_ITEMS } from "./ContextM
 export { FileAssociationService, COMMON_EXTENSIONS } from "./FileAssociationService";
 export { CreateFileTypesService, CREATE_FILE_TYPES } from "./CreateFileTypesService";
 export { ThemeService } from "./ThemeService";
+export { BookmarksService } from "./BookmarksService";
+export { ViewModeService } from "./ViewModeService";
 
 export type { ContextMenuAction } from "./ContextMenuService";
 export type { FolderStats } from "./FolderService";
@@ -16,3 +18,5 @@ export type { ContextMenuItem, ContextMenuConfig, ContextMenuContext } from "./C
 export type { FileAssociation, FileAssociationConfig } from "./FileAssociationService";
 export type { CreateFileType } from "./CreateFileTypesService";
 export type { ThemeMode } from "./ThemeService";
+export type { Bookmark } from "./BookmarksService";
+export type { ViewMode } from "./ViewModeService";

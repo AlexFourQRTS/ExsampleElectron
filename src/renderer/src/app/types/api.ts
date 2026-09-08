@@ -15,6 +15,20 @@ export interface FileTreeNode {
   children?: FileTreeNode[];
 }
 
+export interface StandardPlace {
+  id: string;
+  label: string;
+  path: string;
+  icon: string;
+}
+
+export interface MountedDevice {
+  id: string;
+  label: string;
+  mountPoint: string;
+  filesystem: string;
+}
+
 declare global {
   interface Window {
     api: {
@@ -57,6 +71,9 @@ declare global {
       moveItem: (sourcePath: string, targetDir: string) => Promise<string>;
       moveItems: (sourcePaths: string[], targetDir: string) => Promise<string[]>;
       openNewWindow: (path: string) => Promise<void>;
+      getStandardPlaces: () => Promise<StandardPlace[]>;
+      getMountedDevices: () => Promise<MountedDevice[]>;
+      getRootDevice: () => Promise<MountedDevice>;
     };
   }
 }

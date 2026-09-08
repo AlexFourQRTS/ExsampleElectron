@@ -1,15 +1,20 @@
 import React, { useState, useMemo } from "react";
-import { Container, IconButton, Box, Tooltip, Typography, Button, CircularProgress, ThemeProvider, CssBaseline } from "@mui/material";
+import { Container, IconButton, Box, Tooltip, Typography, Button, CircularProgress, ThemeProvider, CssBaseline, ToggleButtonGroup, ToggleButton } from "@mui/material";
 import SettingsIcon from "@mui/icons-material/Settings";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
-import { Tree, FileDetailItem } from "./component/Tree";
+import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
+import TableRowsIcon from "@mui/icons-material/TableRows";
+import AppsIcon from "@mui/icons-material/Apps";
+import GridViewIcon from "@mui/icons-material/GridView";
+import { FileDetailItem } from "./component/Tree";
+import { Sidebar } from "./component/Sidebar";
 import { Content } from "./component/Content";
 import { Preview } from "./component/Preview";
 import { SettingsModal } from "./component/SettingsModal";
 import { ResizeHandle } from "./component/ResizeHandle";
 import { createAppTheme } from "./theme/theme";
-import { ThemeService, ThemeMode } from "@services";
+import { ThemeService, ThemeMode, ViewModeService, ViewMode } from "@services";
 import "./types/api";
 
 const TREE_WIDTH_KEY = "explorer_tree_width";
@@ -17,7 +22,12 @@ const PREVIEW_WIDTH_KEY = "explorer_preview_width";
 const DEFAULT_TREE_WIDTH = 280;
 const DEFAULT_PREVIEW_WIDTH = 340;
 
+// Заметно крупные иконки для показать/скрыть панель — по просьбе пользователя
+// в разы больше обычных toolbar-иконок, чтобы сразу бросались в глаза
+const PANEL_TOGGLE_ICON_SIZE = 48;
+
 const themeService = new ThemeService();
+const viewModeService = new ViewModeService();
 
 export default function App(): JSX.Element {
   const [files, setFiles] = useState<FileDetailItem[]>([]);
@@ -25,12 +35,38 @@ export default function App(): JSX.Element {
   const [currentPath, setCurrentPath] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => themeService.getMode());
+  const [viewMode, setViewMode] = useState<ViewMode>(() => viewModeService.getViewMode());
+  const [sidebarVisible, setSidebarVisible] = useState(() => viewModeService.isSidebarVisible());
+  const [previewVisible, setPreviewVisible] = useState(() => viewModeService.isPreviewVisible());
 
   const theme = useMemo(() => createAppTheme(themeMode), [themeMode]);
 
   const handleToggleTheme = () => {
     setThemeMode(themeService.toggle());
   };
+
+  const handleViewModeChange = (_: React.MouseEvent, newMode: ViewMode | null) => {
+    if (!newMode) return;
+    setViewMode(newMode);
+    viewModeService.setViewMode(newMode);
+  };
+
+  const handleToggleSidebar = () => {
+    setSidebarVisible((prev) => {
+      const next = !prev;
+      viewModeService.setSidebarVisible(next);
+      return next;
+    });
+  };
+
+  const handleTogglePreview = () => {
+    setPreviewVisible((prev) => {
+      const next = !prev;
+      viewModeService.setPreviewVisible(next);
+      return next;
+    });
+  };
+
   const [isLoading, setIsLoading] = useState(true);
   const [treeWidth, setTreeWidth] = useState<number>(() => {
     const saved = localStorage.getItem(TREE_WIDTH_KEY);
@@ -168,24 +204,68 @@ export default function App(): JSX.Element {
             <Box
               sx={{
                 display: "flex",
-                justifyContent: "flex-end",
-                gap: 0.5,
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 1,
                 mb: 1,
               }}
             >
-              <Tooltip title={themeMode === "dark" ? "Светлая тема" : "Графитовая тема"}>
-                <IconButton onClick={handleToggleTheme} size="small">
-                  {themeMode === "dark" ? <LightModeIcon /> : <DarkModeIcon />}
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Настройки">
-                <IconButton
-                  onClick={() => setSettingsOpen(true)}
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Tooltip title={sidebarVisible ? "Скрыть боковую панель" : "Показать боковую панель"}>
+                  <IconButton onClick={handleToggleSidebar} color={sidebarVisible ? "primary" : "default"}>
+                    <ViewSidebarIcon sx={{ fontSize: PANEL_TOGGLE_ICON_SIZE }} />
+                  </IconButton>
+                </Tooltip>
+
+                <ToggleButtonGroup
+                  value={viewMode}
+                  exclusive
+                  onChange={handleViewModeChange}
                   size="small"
                 >
-                  <SettingsIcon />
-                </IconButton>
-              </Tooltip>
+                  <ToggleButton value="table">
+                    <Tooltip title="Таблица">
+                      <TableRowsIcon fontSize="small" />
+                    </Tooltip>
+                  </ToggleButton>
+                  <ToggleButton value="icons-small">
+                    <Tooltip title="Мелкие значки">
+                      <AppsIcon fontSize="small" />
+                    </Tooltip>
+                  </ToggleButton>
+                  <ToggleButton value="icons-medium">
+                    <Tooltip title="Средние значки">
+                      <GridViewIcon fontSize="small" />
+                    </Tooltip>
+                  </ToggleButton>
+                  <ToggleButton value="icons-large">
+                    <Tooltip title="Крупные значки (с предпросмотром фото)">
+                      <GridViewIcon fontSize="medium" />
+                    </Tooltip>
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </Box>
+
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Tooltip title={themeMode === "dark" ? "Светлая тема" : "Графитовая тема"}>
+                  <IconButton onClick={handleToggleTheme} size="small">
+                    {themeMode === "dark" ? <LightModeIcon /> : <DarkModeIcon />}
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Настройки">
+                  <IconButton
+                    onClick={() => setSettingsOpen(true)}
+                    size="small"
+                  >
+                    <SettingsIcon />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title={previewVisible ? "Скрыть панель предпросмотра" : "Показать панель предпросмотра"}>
+                  <IconButton onClick={handleTogglePreview} color={previewVisible ? "primary" : "default"}>
+                    <ViewSidebarIcon sx={{ fontSize: PANEL_TOGGLE_ICON_SIZE, transform: "scaleX(-1)" }} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
             </Box>
 
             {!currentPath ? (
@@ -225,15 +305,21 @@ export default function App(): JSX.Element {
               overflow: "hidden",
             }}
           >
-            <Tree
-              onFilesChange={(newFiles) => {
-                handleFilesChange(newFiles);
-              }}
-              onFolderSelect={setCurrentPath}
-              width={treeWidth}
-            />
+            {sidebarVisible && (
+              <>
+                <Sidebar
+                  currentPath={currentPath}
+                  onFilesChange={(newFiles) => {
+                    handleFilesChange(newFiles);
+                  }}
+                  onFolderSelect={setCurrentPath}
+                  onOpenFolder={handleOpenFolder}
+                  width={treeWidth}
+                />
 
-            <ResizeHandle onResize={handleTreeResize} />
+                <ResizeHandle onResize={handleTreeResize} />
+              </>
+            )}
 
             <Content
               files={files}
@@ -243,11 +329,15 @@ export default function App(): JSX.Element {
               onOpenFolder={handleOpenFolder}
               onGoBack={handleGoBack}
               onRefresh={handleRefresh}
+              viewMode={viewMode}
             />
 
-            <ResizeHandle onResize={handlePreviewResize} />
-
-            <Preview files={selectedFiles} width={previewWidth} />
+            {previewVisible && (
+              <>
+                <ResizeHandle onResize={handlePreviewResize} />
+                <Preview files={selectedFiles} width={previewWidth} />
+              </>
+            )}
           </Box>
             )}
           </>

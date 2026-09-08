@@ -446,40 +446,51 @@ export class AppService {
         throw new Error('Не удалось определить домашнюю директорию (HOME)')
       }
 
+      const launch = await this.installLaunchBinary()
+      log.push(`Исполняемый файл: ${launch.execPath}`)
+
       const applicationsDir = path.join(homeDir, '.local/share/applications')
       await fs.mkdir(applicationsDir, { recursive: true })
 
       const desktopFilePath = path.join(applicationsDir, 'electron-explorer.desktop')
-      const desktopContent = this.buildDesktopEntryContent()
+      const desktopContent = this.buildDesktopEntryContent(launch)
 
       await fs.writeFile(desktopFilePath, desktopContent, 'utf-8')
       await fs.chmod(desktopFilePath, 0o755)
       log.push(`Создан .desktop файл: ${desktopFilePath}`)
 
-      try {
-        execSync('xdg-mime default electron-explorer.desktop inode/directory', { stdio: 'pipe' })
-        log.push('xdg-mime default inode/directory установлен')
-      } catch (error: any) {
-        throw new Error(`Не удалось выполнить xdg-mime: ${error.message || error}`)
-      }
-
-      // На GNOME/Nautilus и других gio-based окружениях xdg-mime зачастую игнорируется —
-      // дублируем регистрацию через gio mime, если утилита доступна
-      try {
-        execSync('which gio', { stdio: 'pipe' })
-        execSync('gio mime inode/directory electron-explorer.desktop', { stdio: 'pipe' })
-        log.push('gio mime inode/directory установлен (для GNOME/Nautilus)')
-      } catch {
-        log.push('gio не найден или недоступен — пропущено (не критично)')
-      }
-
-      // Обновляем кэш desktop-файлов, иначе DE может не увидеть новый .desktop сразу
+      // Обновляем кэш desktop-файлов ПЕРЕД xdg-mime/gio — иначе они не увидят
+      // только что созданный .desktop файл (gio падает с "Failed to load info")
       try {
         execSync(`update-desktop-database "${applicationsDir}"`, { stdio: 'pipe' })
         log.push('Кэш desktop-файлов обновлён')
       } catch {
         log.push('update-desktop-database не найден — пропущено (не критично)')
       }
+
+      const mimeTypes = ['inode/directory', 'inode/mount-point']
+      try {
+        for (const mimeType of mimeTypes) {
+          execSync(`xdg-mime default electron-explorer.desktop ${mimeType}`, { stdio: 'pipe' })
+          log.push(`xdg-mime default ${mimeType} установлен`)
+        }
+      } catch (error: any) {
+        throw new Error(`Не удалось выполнить xdg-mime: ${error.message || error}`)
+      }
+
+      // На GNOME/Nautilus/Cinnamon и других gio-based окружениях xdg-mime зачастую
+      // игнорируется — дублируем регистрацию через gio mime, если утилита доступна
+      try {
+        execSync('which gio', { stdio: 'pipe' })
+        for (const mimeType of mimeTypes) {
+          execSync(`gio mime ${mimeType} electron-explorer.desktop`, { stdio: 'pipe' })
+          log.push(`gio mime ${mimeType} установлен`)
+        }
+      } catch (error: any) {
+        log.push(`gio mime не удалось выполнить: ${error.message || error} (не критично)`)
+      }
+
+      this.tryBindCinnamonFileManagerShortcut(launch.execPath, log)
 
       // Диагностика: проверяем, что реально зарегистрировано в системе
       try {
@@ -519,25 +530,126 @@ export class AppService {
     throw new Error(`Платформа ${platform} не поддерживается для регистрации по умолчанию`)
   }
 
+  // 22a. Путь, который должен попасть в Exec= ярлыка. Dev-бинарник Electron
+  // для этого не подходит: без `npm run dev` папки из системы не откроются.
+  private static resolveLaunchPath(): { execPath: string; isAppBundle: boolean } {
+    if (process.env.APPIMAGE && fsSync.existsSync(process.env.APPIMAGE)) {
+      return { execPath: process.env.APPIMAGE, isAppBundle: true }
+    }
+
+    if (app.isPackaged) {
+      return { execPath: process.execPath, isAppBundle: true }
+    }
+
+    const distDir = path.join(app.getAppPath(), 'dist')
+    try {
+      const images = fsSync.readdirSync(distDir).filter((file) => file.endsWith('.AppImage'))
+      if (images.length > 0) {
+        return { execPath: path.join(distDir, images[0]), isAppBundle: true }
+      }
+    } catch {
+      // dist ещё не собирали — ниже fallback на electron + app path
+    }
+
+    return { execPath: process.execPath, isAppBundle: false }
+  }
+
+  // Копирует AppImage в стабильное место и ставит обёртку: Electron воспринимает
+  // первый аргумент-директорию как путь к приложению, поэтому папку нужно
+  // передавать после `--`. Обёртка также сбрасывает ELECTRON_RUN_AS_NODE.
+  private static async installLaunchBinary(): Promise<{ execPath: string; isAppBundle: boolean }> {
+    const resolved = this.resolveLaunchPath()
+    if (!resolved.execPath.endsWith('.AppImage')) {
+      return resolved
+    }
+
+    const destDir = path.join(os.homedir(), '.local/share/electron-explorer')
+    const dest = path.join(destDir, 'electron-explorer.AppImage')
+    const wrapper = path.join(destDir, 'electron-explorer')
+    await fs.mkdir(destDir, { recursive: true })
+    if (path.resolve(resolved.execPath) !== path.resolve(dest)) {
+      await fs.copyFile(resolved.execPath, dest)
+      await fs.chmod(dest, 0o755)
+    }
+
+    const script = [
+      '#!/bin/bash',
+      'unset ELECTRON_RUN_AS_NODE',
+      'unset ELECTRON_NO_ASAR',
+      `exec ${this.quoteDesktopExecArg(dest)} -- "$@"`,
+      '',
+    ].join('\n')
+    await fs.writeFile(wrapper, script, 'utf-8')
+    await fs.chmod(wrapper, 0o755)
+    return { execPath: wrapper, isAppBundle: true }
+  }
+
+  private static quoteDesktopExecArg(value: string): string {
+    if (!/[ \t\n"'\\><~|&;$*?#()`]/.test(value)) {
+      return value
+    }
+    return `"${value.replace(/"/g, '\\"')}"`
+  }
+
   // 22b. Строит содержимое .desktop файла (общее для user-level и sudo-регистрации)
-  private static buildDesktopEntryContent(): string {
-    // В dev-режиме process.execPath указывает на бинарник Electron, а не на наше
-    // приложение — ему обязательно нужно передать путь до app (app.getAppPath()).
-    // В собранном (packaged) виде execPath уже указывает на итоговый бинарник.
-    const execLine = app.isPackaged
-      ? `${process.execPath} %f`
-      : `${process.execPath} ${app.getAppPath()} %f`
+  private static buildDesktopEntryContent(
+    launch: { execPath: string; isAppBundle: boolean } = this.resolveLaunchPath()
+  ): string {
+    const quotedExec = this.quoteDesktopExecArg(launch.execPath)
+    // %U принимает и обычные пути, и file:// URL. `--` нужен, чтобы Electron
+    // не принял открываемую папку за каталог приложения.
+    const execLine = launch.isAppBundle
+      ? `${quotedExec} -- %U`
+      : `${quotedExec} ${this.quoteDesktopExecArg(app.getAppPath())} -- %U`
 
     return `[Desktop Entry]
 Type=Application
 Name=Electron Explorer
 Exec=${execLine}
 Icon=folder
-Categories=Utility;System;
-MimeType=inode/directory;
+Categories=System;FileManager;Utility;
+MimeType=inode/directory;inode/mount-point;
 Terminal=false
 StartupNotify=true
+StartupWMClass=electron-example
 `
+  }
+
+  // Super+E / «Open File Manager» в Cinnamon по умолчанию вызывает `nemo`
+  // напрямую, минуя MIME. Переназначаем такую горячую клавишу на наш бинарник.
+  private static tryBindCinnamonFileManagerShortcut(execPath: string, log: string[]): void {
+    const desktop = process.env.XDG_CURRENT_DESKTOP || ''
+    if (!desktop.toLowerCase().includes('cinnamon')) {
+      return
+    }
+
+    try {
+      const raw = execSync('gsettings get org.cinnamon.desktop.keybindings custom-list', {
+        encoding: 'utf-8',
+      }).trim()
+      const ids = [...raw.matchAll(/custom\d+/g)].map((match) => match[0])
+
+      for (const id of ids) {
+        const prefix =
+          `org.cinnamon.desktop.keybindings.custom-keybinding:` +
+          `/org/cinnamon/desktop/keybindings/custom-keybindings/${id}/`
+        const command = execSync(`gsettings get ${prefix} command`, { encoding: 'utf-8' })
+          .trim()
+          .replace(/^'|'$/g, '')
+        const name = execSync(`gsettings get ${prefix} name`, { encoding: 'utf-8' })
+          .trim()
+          .replace(/^'|'$/g, '')
+
+        if (command === 'nemo' || /file manager|файлов|проводник/i.test(name)) {
+          execSync(`gsettings set ${prefix} command ${JSON.stringify(execPath)}`)
+          log.push(`Cinnamon: горячая клавиша «${name}» теперь запускает Electron Explorer`)
+        }
+      }
+    } catch (error: any) {
+      log.push(
+        `Не удалось обновить горячую клавишу Cinnamon: ${error.message || error} (не критично)`
+      )
+    }
   }
 
   // 22c. Генерирует готовую команду для терминала (с sudo), которую пользователь
@@ -553,9 +665,13 @@ StartupNotify=true
       `sudo tee /usr/share/applications/electron-explorer.desktop > /dev/null << 'EOF'`,
       desktopContent.trimEnd(),
       `EOF`,
-      `sudo xdg-mime default electron-explorer.desktop inode/directory`,
-      `command -v gio >/dev/null 2>&1 && sudo gio mime inode/directory electron-explorer.desktop`,
+      // update-desktop-database ДО gio mime — иначе gio не видит свежесозданный
+      // .desktop файл и падает с "Failed to load info for handler"
       `sudo update-desktop-database /usr/share/applications`,
+      `sudo xdg-mime default electron-explorer.desktop inode/directory`,
+      `sudo xdg-mime default electron-explorer.desktop inode/mount-point`,
+      `command -v gio >/dev/null 2>&1 && gio mime inode/directory electron-explorer.desktop`,
+      `command -v gio >/dev/null 2>&1 && gio mime inode/mount-point electron-explorer.desktop`,
     ].join('\n')
   }
 
@@ -565,25 +681,41 @@ StartupNotify=true
   static getFolderFromArgs(argv: string[] = process.argv): string | null {
     for (const arg of argv) {
       if (arg.startsWith('--folder=')) {
-        return arg.substring(9)
+        return this.resolveDirectoryArg(arg.substring(9))
       }
     }
 
     // Ищем последний аргумент, реально указывающий на существующую директорию.
     // В dev-режиме argv = [electronBin, appPath, ...userArgs], в packaged-режиме
     // argv = [appBin, ...userArgs] — поэтому проверяем реальное существование,
-    // а не полагаемся на позицию аргумента.
+    // а не полагаемся на позицию аргумента. DE часто передаёт file:// URL.
     for (let i = argv.length - 1; i >= 0; i--) {
       const arg = argv[i]
       if (arg.startsWith('-')) continue
-      try {
-        const stats = fsSync.statSync(arg)
-        if (stats.isDirectory()) {
-          return arg
-        }
-      } catch {
-        // Не путь — пропускаем
+      const directory = this.resolveDirectoryArg(arg)
+      if (directory) {
+        return directory
       }
+    }
+    return null
+  }
+
+  private static resolveDirectoryArg(arg: string): string | null {
+    let candidate = arg
+    if (candidate.startsWith('file://')) {
+      try {
+        candidate = decodeURIComponent(new URL(candidate).pathname)
+      } catch {
+        return null
+      }
+    }
+
+    try {
+      if (fsSync.statSync(candidate).isDirectory()) {
+        return candidate
+      }
+    } catch {
+      return null
     }
     return null
   }

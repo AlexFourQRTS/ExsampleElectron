@@ -19,7 +19,9 @@ import { FileDetailItem } from "./Tree";
 import { ContextMenu } from "./ContextMenu";
 import { ColumnResizeHandle } from "./ColumnResizeHandle";
 import { SelectionBox } from "./SelectionBox";
+import { IconGridView } from "./IconGridView";
 import { useRubberBandSelection, SelectionRect } from "../hooks/useRubberBandSelection";
+import { ViewMode } from "@services";
 import "../types/api";
 
 const COLUMN_WIDTHS_KEY = "explorer_column_widths";
@@ -56,6 +58,7 @@ interface ContentProps {
   onOpenFolder: (folderPath: string) => void;
   onGoBack: () => void;
   onRefresh?: () => void;
+  viewMode: ViewMode;
 }
 
 const formatFileSize = (bytes?: number): string => {
@@ -86,6 +89,7 @@ export const Content: React.FC<ContentProps> = ({
   onOpenFolder,
   onGoBack,
   onRefresh,
+  viewMode,
 }) => {
   const lastClickedIndex = React.useRef<number>(-1);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -357,6 +361,26 @@ export const Content: React.FC<ContentProps> = ({
               </Button>
             )}
           </Box>
+        ) : viewMode !== "table" ? (
+          <IconGridView
+            files={files}
+            selectedFiles={selectedFiles}
+            size={viewMode}
+            dragOverPath={dragOverPath}
+            registerRef={(id, el) => {
+              if (el) rowRefs.current.set(id, el);
+              else rowRefs.current.delete(id);
+            }}
+            onSelectItem={handleSelectItem}
+            onContextMenu={handleContextMenu}
+            onDoubleClick={(item) => {
+              if (item.type === "directory") onOpenFolder(item.path);
+            }}
+            onDragStart={handleDragStart}
+            onDragOverItem={handleDragOverRow}
+            onDragLeaveItem={handleDragLeaveRow}
+            onDropItem={handleDropOnRow}
+          />
         ) : (
           <TableContainer
             component={Paper}

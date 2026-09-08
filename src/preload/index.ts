@@ -40,6 +40,9 @@ contextBridge.exposeInMainWorld('api', {
   moveItem: (sourcePath: string, targetDir: string) => ipcRenderer.invoke('moveItem', sourcePath, targetDir),
   moveItems: (sourcePaths: string[], targetDir: string) => ipcRenderer.invoke('moveItems', sourcePaths, targetDir),
   openNewWindow: (path: string) => ipcRenderer.invoke('openNewWindow', path),
+  getStandardPlaces: () => ipcRenderer.invoke('getStandardPlaces'),
+  getMountedDevices: () => ipcRenderer.invoke('getMountedDevices'),
+  getRootDevice: () => ipcRenderer.invoke('getRootDevice'),
 });
 
 contextBridge.exposeInMainWorld('electron', {

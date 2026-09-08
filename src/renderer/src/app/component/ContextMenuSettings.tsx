@@ -8,12 +8,13 @@ import {
   Checkbox,
   Button,
   Paper,
-  Divider,
-  IconButton,
-  Chip,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import RestoreIcon from "@mui/icons-material/Restore";
+import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
+import LayersClearIcon from "@mui/icons-material/LayersClear";
 import {
   ContextMenuConfigService,
   ContextMenuItem,
@@ -21,31 +22,127 @@ import {
   CreateFileType,
 } from "@services";
 
-const CONTEXT_LABELS: Record<string, { label: string; color: "primary" | "secondary" | "default" }> = {
-  item: { label: "Файл/папка", color: "primary" },
-  empty: { label: "Пустая область", color: "secondary" },
-  both: { label: "Везде", color: "default" },
-};
-
 interface ContextMenuSettingsProps {
   onClose?: () => void;
 }
 
-export const ContextMenuSettings: React.FC<ContextMenuSettingsProps> = ({
-  onClose,
-}) => {
+const configService = new ContextMenuConfigService();
+const createTypesService = new CreateFileTypesService();
+
+// Один переиспользуемый список пунктов меню для одного контекста
+// (пустая область ИЛИ выбранный файл) — реорганизация и включение/выключение
+// работают независимо для каждого из двух списков
+const ContextMenuList: React.FC<{ context: "item" | "empty" }> = ({ context }) => {
   const [items, setItems] = useState<ContextMenuItem[]>([]);
-  const [createTypes, setCreateTypes] = useState<CreateFileType[]>([]);
-  const [enabledCreateIds, setEnabledCreateIds] = useState<string[]>([]);
-  const configService = new ContextMenuConfigService();
-  const createTypesService = new CreateFileTypesService();
 
   useEffect(() => {
-    const config = configService.getConfig();
-    setItems(config.items);
+    setItems(configService.getItemsForContext(context));
+  }, [context]);
+
+  const refresh = () => setItems(configService.getItemsForContext(context));
+
+  const handleToggle = (itemId: string) => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+    configService.toggleItem(itemId, !item.enabled);
+    refresh();
+  };
+
+  const handleMove = (index: number, direction: -1 | 1) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= items.length) return;
+
+    const updated = [...items];
+    [updated[index], updated[targetIndex]] = [updated[targetIndex], updated[index]];
+    setItems(updated);
+    configService.reorderItems(updated, context);
+  };
+
+  return (
+    <Paper
+      elevation={0}
+      sx={{ border: 1, borderColor: "divider", maxHeight: 340, overflow: "auto" }}
+    >
+      <List disablePadding>
+        {items.map((item, index) => (
+          <ListItem
+            key={item.id}
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              borderBottom: 1,
+              borderColor: "divider",
+              py: 0.75,
+            }}
+          >
+            <DragIndicatorIcon sx={{ color: "text.secondary" }} fontSize="small" />
+
+            {item.type !== "divider" && (
+              <Checkbox
+                edge="start"
+                checked={item.enabled}
+                onChange={() => handleToggle(item.id)}
+                tabIndex={-1}
+                disableRipple
+                size="small"
+              />
+            )}
+
+            <ListItemText
+              primary={item.label || "— Разделитель —"}
+              primaryTypographyProps={{
+                variant: "body2",
+                sx: {
+                  opacity: item.enabled ? 1 : 0.6,
+                  fontStyle: item.label ? "normal" : "italic",
+                },
+              }}
+              sx={{ flexGrow: 1, ml: item.type === "divider" ? 3 : 0 }}
+            />
+
+            <Box sx={{ display: "flex", gap: 0.5 }}>
+              <Button
+                size="small"
+                onClick={() => handleMove(index, -1)}
+                disabled={index === 0}
+                sx={{ minWidth: "auto", p: 0.5 }}
+              >
+                ↑
+              </Button>
+              <Button
+                size="small"
+                onClick={() => handleMove(index, 1)}
+                disabled={index === items.length - 1}
+                sx={{ minWidth: "auto", p: 0.5 }}
+              >
+                ↓
+              </Button>
+            </Box>
+          </ListItem>
+        ))}
+      </List>
+    </Paper>
+  );
+};
+
+export const ContextMenuSettings: React.FC<ContextMenuSettingsProps> = () => {
+  const [tab, setTab] = useState<"empty" | "item">("item");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [createTypes, setCreateTypes] = useState<CreateFileType[]>([]);
+  const [enabledCreateIds, setEnabledCreateIds] = useState<string[]>([]);
+
+  useEffect(() => {
     setCreateTypes(createTypesService.getAllTypes());
     setEnabledCreateIds(createTypesService.getEnabledIds());
   }, []);
+
+  const handleReset = () => {
+    if (window.confirm("Восстановить пункты меню по умолчанию (для обоих контекстов)?")) {
+      configService.resetToDefault();
+      setRefreshKey((k) => k + 1);
+    }
+  };
 
   const handleToggleCreateType = (id: string) => {
     const isEnabled = enabledCreateIds.includes(id);
@@ -53,169 +150,50 @@ export const ContextMenuSettings: React.FC<ContextMenuSettingsProps> = ({
     setEnabledCreateIds(createTypesService.getEnabledIds());
   };
 
-  const handleToggle = (itemId: string) => {
-    const updated = items.map((item) =>
-      item.id === itemId ? { ...item, enabled: !item.enabled } : item
-    );
-    setItems(updated);
-    const config = configService.getConfig();
-    config.items = updated;
-    configService.saveConfig(config);
-  };
-
-  const handleReset = () => {
-    if (window.confirm("Восстановить пункты меню по умолчанию?")) {
-      configService.resetToDefault();
-      const config = configService.getConfig();
-      setItems(config.items);
-    }
-  };
-
-  const handleMoveUp = (index: number) => {
-    if (index > 0) {
-      const updated = [...items];
-      [updated[index - 1], updated[index]] = [updated[index], updated[index - 1]];
-      updated.forEach((item, i) => (item.order = i));
-      setItems(updated);
-      configService.reorderItems(updated);
-    }
-  };
-
-  const handleMoveDown = (index: number) => {
-    if (index < items.length - 1) {
-      const updated = [...items];
-      [updated[index], updated[index + 1]] = [updated[index + 1], updated[index]];
-      updated.forEach((item, i) => (item.order = i));
-      setItems(updated);
-      configService.reorderItems(updated);
-    }
-  };
-
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-          Пункты контекстного меню
+          Контекстное меню
         </Typography>
-        <Button
-          size="small"
-          startIcon={<RestoreIcon />}
-          onClick={handleReset}
-          variant="outlined"
-        >
+        <Button size="small" startIcon={<RestoreIcon />} onClick={handleReset} variant="outlined">
           По умолчанию
         </Button>
       </Box>
 
-      <Paper
-        elevation={0}
-        sx={{
-          border: 1,
-          borderColor: "divider",
-          maxHeight: 400,
-          overflow: "auto",
-        }}
-      >
-        <List disablePadding>
-          {items.map((item, index) => (
-            <Box key={item.id}>
-              <ListItem
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                  borderBottom: 1,
-                  borderColor: "divider",
-                  py: 1,
-                }}
-              >
-                <DragIndicatorIcon
-                  sx={{ cursor: "grab", color: "text.secondary" }}
-                  fontSize="small"
-                />
-
-                {item.type !== "divider" && (
-                  <Checkbox
-                    edge="start"
-                    checked={item.enabled}
-                    onChange={() => handleToggle(item.id)}
-                    tabIndex={-1}
-                    disableRipple
-                    size="small"
-                  />
-                )}
-
-                <ListItemText
-                  primary={item.label || "— Разделитель —"}
-                  primaryTypographyProps={{
-                    variant: "body2",
-                    sx: {
-                      opacity: item.enabled ? 1 : 0.6,
-                      fontStyle: item.label ? "normal" : "italic",
-                    },
-                  }}
-                  sx={{ flexGrow: 1, ml: item.type === "divider" ? 3 : 0 }}
-                />
-
-                {item.type !== "divider" && (
-                  <Chip
-                    label={CONTEXT_LABELS[item.context]?.label}
-                    color={CONTEXT_LABELS[item.context]?.color}
-                    size="small"
-                    variant="outlined"
-                    sx={{ fontSize: "0.7rem" }}
-                  />
-                )}
-
-                <Box sx={{ display: "flex", gap: 0.5 }}>
-                  <Button
-                    size="small"
-                    onClick={() => handleMoveUp(index)}
-                    disabled={index === 0}
-                    sx={{ minWidth: "auto", p: 0.5 }}
-                  >
-                    ↑
-                  </Button>
-                  <Button
-                    size="small"
-                    onClick={() => handleMoveDown(index)}
-                    disabled={index === items.length - 1}
-                    sx={{ minWidth: "auto", p: 0.5 }}
-                  >
-                    ↓
-                  </Button>
-                </Box>
-              </ListItem>
-            </Box>
-          ))}
-        </List>
-      </Paper>
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ minHeight: 36 }}>
+        <Tab
+          value="item"
+          label="Выбранный файл/папка"
+          icon={<InsertDriveFileIcon fontSize="small" />}
+          iconPosition="start"
+          sx={{ minHeight: 36, textTransform: "none" }}
+        />
+        <Tab
+          value="empty"
+          label="Пустое поле"
+          icon={<LayersClearIcon fontSize="small" />}
+          iconPosition="start"
+          sx={{ minHeight: 36, textTransform: "none" }}
+        />
+      </Tabs>
 
       <Typography variant="caption" color="text.secondary">
-        Включено: {items.filter((i) => i.enabled).length} из {items.length} пункт
+        {tab === "item"
+          ? "Показывается при правом клике на файл или папку. Порядок и набор пунктов независимы от меню пустого поля."
+          : "Показывается при правом клике на пустое место в текущей папке (не на файл). Порядок и набор пунктов независимы от меню файла/папки."}
       </Typography>
 
-      <Divider />
+      <ContextMenuList key={`${tab}-${refreshKey}`} context={tab} />
 
-      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 600, mt: 1 }}>
         Типы файлов в подменю «Создать»
       </Typography>
 
-      <Paper
-        elevation={0}
-        sx={{
-          border: 1,
-          borderColor: "divider",
-          maxHeight: 300,
-          overflow: "auto",
-        }}
-      >
+      <Paper elevation={0} sx={{ border: 1, borderColor: "divider", maxHeight: 250, overflow: "auto" }}>
         <List disablePadding>
           {createTypes.map((type) => (
-            <ListItem
-              key={type.id}
-              sx={{ borderBottom: 1, borderColor: "divider", py: 0.5 }}
-            >
+            <ListItem key={type.id} sx={{ borderBottom: 1, borderColor: "divider", py: 0.5 }}>
               <Checkbox
                 edge="start"
                 checked={enabledCreateIds.includes(type.id)}

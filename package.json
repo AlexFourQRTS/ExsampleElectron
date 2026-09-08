@@ -44,6 +44,7 @@
     "files": [
       "out/**/*"
     ],
+    "electronLanguages": ["ru", "en-US", "en"],
     "mac": {
       "target": ["dmg", "zip"],
       "category": "public.app-category.utilities"

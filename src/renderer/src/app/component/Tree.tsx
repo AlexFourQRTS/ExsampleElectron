@@ -51,6 +51,9 @@ interface TreeProps {
   onFilesChange: (files: FileDetailItem[]) => void;
   onFolderSelect?: (path: string) => void;
   width?: number;
+  // Встроенный режим — используется внутри Sidebar, без собственной
+  // обёртки/заголовка (те уже предоставляет родитель)
+  embedded?: boolean;
 }
 
 // ==========================================
@@ -157,7 +160,7 @@ const FileTreeItem: React.FC<FileTreeItemProps> = ({
 // ОСНОВНОЙ КОМПОНЕНТ TREE
 // ==========================================
 
-export const Tree: React.FC<TreeProps> = ({ onFilesChange, onFolderSelect, width = 280 }) => {
+export const Tree: React.FC<TreeProps> = ({ onFilesChange, onFolderSelect, width = 280, embedded = false }) => {
   const [treeData, setTreeData] = useState<FileTreeNode | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -255,6 +258,26 @@ export const Tree: React.FC<TreeProps> = ({ onFilesChange, onFolderSelect, width
     }
   };
 
+  const treeList = (
+    <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
+      {treeData ? (
+        <List component="nav" disablePadding>
+          <FileTreeItem node={treeData} onSelectFolder={handleSelectFolder} />
+        </List>
+      ) : (
+        <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mt: 4 }}>
+          Папка не выбрана
+        </Typography>
+      )}
+    </Box>
+  );
+
+  if (embedded) {
+    return (
+      <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>{treeList}</Box>
+    );
+  }
+
   return (
     <Box
       sx={{
@@ -274,17 +297,7 @@ export const Tree: React.FC<TreeProps> = ({ onFilesChange, onFolderSelect, width
         Папки
       </Typography>
 
-      <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
-        {treeData ? (
-          <List component="nav" disablePadding>
-            <FileTreeItem node={treeData} onSelectFolder={handleSelectFolder} />
-          </List>
-        ) : (
-          <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", mt: 4 }}>
-            Папка не выбрана
-          </Typography>
-        )}
-      </Box>
+      {treeList}
     </Box>
   );
 };
