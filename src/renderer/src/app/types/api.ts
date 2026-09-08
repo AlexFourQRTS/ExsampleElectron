@@ -74,6 +74,10 @@ declare global {
       getStandardPlaces: () => Promise<StandardPlace[]>;
       getMountedDevices: () => Promise<MountedDevice[]>;
       getRootDevice: () => Promise<MountedDevice>;
+      getCachedThumbnail: (filePath: string) => Promise<string | null>;
+      saveThumbnail: (filePath: string, base64Data: string) => Promise<string>;
+      markThumbnailFailed: (filePath: string) => Promise<void>;
+      isThumbnailFailed: (filePath: string) => Promise<boolean>;
     };
   }
 }

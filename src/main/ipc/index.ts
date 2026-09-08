@@ -8,6 +8,7 @@ import { MoveService } from "../execution/moveService";
 import { WindowManagerService } from "../windows/windowManagerService";
 import { UserDirsService } from "../execution/userDirsService";
 import { DeviceService } from "../execution/deviceService";
+import { ThumbnailService } from "../execution/thumbnailService";
 import fs from "fs/promises";
 
 export function setupIpcHandlers(): void {
@@ -247,4 +248,26 @@ export function setupIpcHandlers(): void {
   ipcMain.handle("getMountedDevices", async () => await DeviceService.getMountedDevices());
 
   ipcMain.handle("getRootDevice", () => DeviceService.getRootDevice());
+
+  // Кэш миниатюр фото/видео
+  ipcMain.handle(
+    "getCachedThumbnail",
+    async (_, filePath: string) => await ThumbnailService.getCachedThumbnailPath(filePath),
+  );
+
+  ipcMain.handle(
+    "saveThumbnail",
+    async (_, filePath: string, base64Data: string) =>
+      await ThumbnailService.saveThumbnail(filePath, base64Data),
+  );
+
+  ipcMain.handle(
+    "markThumbnailFailed",
+    async (_, filePath: string) => await ThumbnailService.markAsFailed(filePath),
+  );
+
+  ipcMain.handle(
+    "isThumbnailFailed",
+    async (_, filePath: string) => await ThumbnailService.isMarkedAsFailed(filePath),
+  );
 }

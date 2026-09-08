@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Box, Typography, CircularProgress } from "@mui/material";
 import FolderIcon from "@mui/icons-material/Folder";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
@@ -7,7 +7,9 @@ import AudiotrackIcon from "@mui/icons-material/Audiotrack";
 import DescriptionIcon from "@mui/icons-material/Description";
 import { FileDetailItem } from "./Tree";
 import { IMAGE_EXTS, VIDEO_EXTS, AUDIO_EXTS, TEXT_EXTS, getCleanExtension, toFileUrl } from "../utils/fileTypes";
-import { ViewMode } from "@services";
+import { ViewMode, ThumbnailGeneratorService } from "@services";
+
+const thumbnailGenerator = new ThumbnailGeneratorService();
 
 interface IconGridViewProps {
   files: FileDetailItem[];
@@ -36,36 +38,80 @@ const FileThumbnail: React.FC<{ item: FileDetailItem; iconSize: number }> = ({ i
   const isVideo = VIDEO_EXTS.includes(ext);
   const isAudio = AUDIO_EXTS.includes(ext);
   const isText = TEXT_EXTS.includes(ext);
+  const hasPreview = isImage || isVideo;
+
+  const [thumbUrl, setThumbUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(hasPreview);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!hasPreview) return;
+
+    let cancelled = false;
+    setThumbUrl(null);
+    setFailed(false);
+    setLoading(true);
+
+    const fileUrl = toFileUrl(item.path);
+    const generate = isImage
+      ? thumbnailGenerator.getImageThumbnail(item.path, fileUrl)
+      : thumbnailGenerator.getVideoThumbnail(item.path, fileUrl);
+
+    generate
+      .then((url) => {
+        if (cancelled) return;
+        if (url) setThumbUrl(url);
+        else setFailed(true);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.path, hasPreview]);
 
   if (item.type === "directory") {
     return <FolderIcon sx={{ fontSize: iconSize }} color="primary" />;
   }
 
-  // Реальный предпросмотр фото прямо в значке
-  if (isImage) {
-    return (
-      <Box
-        component="img"
-        src={toFileUrl(item.path)}
-        alt={item.name}
-        loading="lazy"
-        sx={{
-          width: iconSize,
-          height: iconSize,
-          objectFit: "cover",
-          borderRadius: 1,
-          border: 1,
-          borderColor: "divider",
-        }}
-        onError={(e) => {
-          // Если превью не загрузилось — скрываем img, показывать нечего
-          (e.target as HTMLImageElement).style.display = "none";
-        }}
-      />
-    );
+  if (hasPreview) {
+    if (thumbUrl) {
+      return (
+        <Box
+          component="img"
+          src={thumbUrl}
+          alt={item.name}
+          sx={{
+            width: iconSize,
+            height: iconSize,
+            objectFit: "cover",
+            borderRadius: 1,
+            border: 1,
+            borderColor: "divider",
+          }}
+        />
+      );
+    }
+
+    if (loading) {
+      return <CircularProgress size={Math.max(16, iconSize * 0.4)} />;
+    }
+
+    if (failed) {
+      return isVideo ? (
+        <MovieIcon sx={{ fontSize: iconSize }} color="action" />
+      ) : (
+        <InsertDriveFileIcon sx={{ fontSize: iconSize }} color="action" />
+      );
+    }
   }
 
-  if (isVideo) return <MovieIcon sx={{ fontSize: iconSize }} color="action" />;
   if (isAudio) return <AudiotrackIcon sx={{ fontSize: iconSize }} color="action" />;
   if (isText) return <DescriptionIcon sx={{ fontSize: iconSize }} color="action" />;
   return <InsertDriveFileIcon sx={{ fontSize: iconSize }} color="action" />;

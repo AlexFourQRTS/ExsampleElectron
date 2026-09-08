@@ -572,11 +572,27 @@ export class AppService {
       await fs.chmod(dest, 0o755)
     }
 
+    // Ярлык всегда берёт самый новый AppImage из dist/, иначе после
+    // `npm run make` система продолжала бы открывать старую копию.
+    const distDir = !app.isPackaged
+      ? path.join(app.getAppPath(), 'dist')
+      : process.env.APPIMAGE
+        ? path.dirname(process.env.APPIMAGE)
+        : path.join(path.dirname(process.execPath), '..')
     const script = [
       '#!/bin/bash',
       'unset ELECTRON_RUN_AS_NODE',
       'unset ELECTRON_NO_ASAR',
-      `exec ${this.quoteDesktopExecArg(dest)} -- "$@"`,
+      `DIST_DIR=${this.quoteDesktopExecArg(distDir)}`,
+      `INSTALLED=${this.quoteDesktopExecArg(dest)}`,
+      'APPIMAGE=""',
+      'if [ -d "$DIST_DIR" ]; then',
+      '  APPIMAGE=$(ls -t "$DIST_DIR"/*.AppImage 2>/dev/null | head -1)',
+      'fi',
+      'if [ -z "$APPIMAGE" ] || [ ! -x "$APPIMAGE" ]; then',
+      '  APPIMAGE="$INSTALLED"',
+      'fi',
+      'exec "$APPIMAGE" -- "$@"',
       '',
     ].join('\n')
     await fs.writeFile(wrapper, script, 'utf-8')

@@ -9,6 +9,8 @@ export { CreateFileTypesService, CREATE_FILE_TYPES } from "./CreateFileTypesServ
 export { ThemeService } from "./ThemeService";
 export { BookmarksService } from "./BookmarksService";
 export { ViewModeService } from "./ViewModeService";
+export { ThumbnailGeneratorService } from "./ThumbnailGeneratorService";
+export { SortService } from "./SortService";
 
 export type { ContextMenuAction } from "./ContextMenuService";
 export type { FolderStats } from "./FolderService";
@@ -20,3 +22,4 @@ export type { CreateFileType } from "./CreateFileTypesService";
 export type { ThemeMode } from "./ThemeService";
 export type { Bookmark } from "./BookmarksService";
 export type { ViewMode } from "./ViewModeService";
+export type { SortKey, SortDirection } from "./SortService";

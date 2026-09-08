@@ -43,6 +43,10 @@ contextBridge.exposeInMainWorld('api', {
   getStandardPlaces: () => ipcRenderer.invoke('getStandardPlaces'),
   getMountedDevices: () => ipcRenderer.invoke('getMountedDevices'),
   getRootDevice: () => ipcRenderer.invoke('getRootDevice'),
+  getCachedThumbnail: (filePath: string) => ipcRenderer.invoke('getCachedThumbnail', filePath),
+  saveThumbnail: (filePath: string, base64Data: string) => ipcRenderer.invoke('saveThumbnail', filePath, base64Data),
+  markThumbnailFailed: (filePath: string) => ipcRenderer.invoke('markThumbnailFailed', filePath),
+  isThumbnailFailed: (filePath: string) => ipcRenderer.invoke('isThumbnailFailed', filePath),
 });
 
 contextBridge.exposeInMainWorld('electron', {

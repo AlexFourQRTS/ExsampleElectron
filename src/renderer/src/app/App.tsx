@@ -7,6 +7,14 @@ import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
 import TableRowsIcon from "@mui/icons-material/TableRows";
 import AppsIcon from "@mui/icons-material/Apps";
 import GridViewIcon from "@mui/icons-material/GridView";
+import SortIcon from "@mui/icons-material/Sort";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import CheckIcon from "@mui/icons-material/Check";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
+import ListItemIcon from "@mui/material/ListItemIcon";
+import ListItemText from "@mui/material/ListItemText";
 import { FileDetailItem } from "./component/Tree";
 import { Sidebar } from "./component/Sidebar";
 import { Content } from "./component/Content";
@@ -14,7 +22,7 @@ import { Preview } from "./component/Preview";
 import { SettingsModal } from "./component/SettingsModal";
 import { ResizeHandle } from "./component/ResizeHandle";
 import { createAppTheme } from "./theme/theme";
-import { ThemeService, ThemeMode, ViewModeService, ViewMode } from "@services";
+import { ThemeService, ThemeMode, ViewModeService, ViewMode, SortService, SortKey, SortDirection } from "@services";
 import "./types/api";
 
 const TREE_WIDTH_KEY = "explorer_tree_width";
@@ -26,8 +34,15 @@ const DEFAULT_PREVIEW_WIDTH = 340;
 // в разы больше обычных toolbar-иконок, чтобы сразу бросались в глаза
 const PANEL_TOGGLE_ICON_SIZE = 48;
 
+const SORT_LABELS: Record<SortKey, string> = {
+  name: "По алфавиту",
+  size: "По размеру",
+  type: "По типу",
+};
+
 const themeService = new ThemeService();
 const viewModeService = new ViewModeService();
+const sortService = new SortService();
 
 export default function App(): JSX.Element {
   const [files, setFiles] = useState<FileDetailItem[]>([]);
@@ -63,6 +78,29 @@ export default function App(): JSX.Element {
     setPreviewVisible((prev) => {
       const next = !prev;
       viewModeService.setPreviewVisible(next);
+      return next;
+    });
+  };
+
+  const [sortKey, setSortKey] = useState<SortKey>(() => sortService.getSortKey());
+  const [sortDirection, setSortDirection] = useState<SortDirection>(() => sortService.getSortDirection());
+  const [sortMenuAnchor, setSortMenuAnchor] = useState<HTMLElement | null>(null);
+
+  const sortedFiles = useMemo(
+    () => sortService.sortFiles(files, sortKey, sortDirection),
+    [files, sortKey, sortDirection]
+  );
+
+  const handleSelectSortKey = (key: SortKey) => {
+    setSortKey(key);
+    sortService.setSortKey(key);
+    setSortMenuAnchor(null);
+  };
+
+  const handleToggleSortDirection = () => {
+    setSortDirection((prev) => {
+      const next: SortDirection = prev === "asc" ? "desc" : "asc";
+      sortService.setSortDirection(next);
       return next;
     });
   };
@@ -244,6 +282,37 @@ export default function App(): JSX.Element {
                     </Tooltip>
                   </ToggleButton>
                 </ToggleButtonGroup>
+
+                <Tooltip title={`Сортировка: ${SORT_LABELS[sortKey]}`}>
+                  <IconButton size="small" onClick={(e) => setSortMenuAnchor(e.currentTarget)}>
+                    <SortIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+
+                <Tooltip title={sortDirection === "asc" ? "По возрастанию" : "По убыванию"}>
+                  <IconButton size="small" onClick={handleToggleSortDirection}>
+                    {sortDirection === "asc" ? (
+                      <ArrowUpwardIcon fontSize="small" />
+                    ) : (
+                      <ArrowDownwardIcon fontSize="small" />
+                    )}
+                  </IconButton>
+                </Tooltip>
+
+                <Menu
+                  anchorEl={sortMenuAnchor}
+                  open={!!sortMenuAnchor}
+                  onClose={() => setSortMenuAnchor(null)}
+                >
+                  {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
+                    <MenuItem key={key} onClick={() => handleSelectSortKey(key)}>
+                      <ListItemIcon>
+                        {sortKey === key ? <CheckIcon fontSize="small" /> : null}
+                      </ListItemIcon>
+                      <ListItemText>{SORT_LABELS[key]}</ListItemText>
+                    </MenuItem>
+                  ))}
+                </Menu>
               </Box>
 
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -322,7 +391,7 @@ export default function App(): JSX.Element {
             )}
 
             <Content
-              files={files}
+              files={sortedFiles}
               currentPath={currentPath}
               selectedFiles={selectedFiles}
               onSelectionChange={setSelectedFiles}
