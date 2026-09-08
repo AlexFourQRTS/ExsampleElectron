@@ -11,9 +11,11 @@ import {
 } from "@mui/material";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
 import { FileDetailItem } from "./Tree";
+import "../types/api";
 
 interface PreviewProps {
-  file: FileDetailItem | null;
+  files: FileDetailItem[];
+  width?: number;
 }
 
 const formatBytes = (bytes?: number): string => {
@@ -39,10 +41,14 @@ const IMAGE_EXTS = ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico"];
 const VIDEO_EXTS = ["mp4", "webm", "ogg", "mov"];
 const AUDIO_EXTS = ["mp3", "wav", "ogg", "aac"];
 
-export const Preview: React.FC<PreviewProps> = ({ file }) => {
+export const Preview: React.FC<PreviewProps> = ({ files, width = 340 }) => {
+  const file = files.length === 1 ? files[0] : null;
   const [textContent, setTextContent] = useState<string | null>(null);
   const [loadingText, setLoadingText] = useState<boolean>(false);
   const [readError, setReadError] = useState<boolean>(false);
+  const [folderSize, setFolderSize] = useState<number | null>(null);
+  const [folderFileCount, setFolderFileCount] = useState<number | null>(null);
+  const [loadingFolderStats, setLoadingFolderStats] = useState(false);
 
 // Получаем расширение, гарантированно убирая точку и пробелы
   const getCleanExt = (): string => {
@@ -58,7 +64,6 @@ export const Preview: React.FC<PreviewProps> = ({ file }) => {
   const isAudio = AUDIO_EXTS.includes(ext);
   const isText = TEXT_EXTS.includes(ext);
 
-  // Чтение текста через IPC
   useEffect(() => {
     if (file && isText && file.type === "file") {
       setLoadingText(true);
@@ -80,12 +85,83 @@ export const Preview: React.FC<PreviewProps> = ({ file }) => {
     }
   }, [file?.path, isText]);
 
+  useEffect(() => {
+    if (file && file.type === "directory") {
+      setLoadingFolderStats(true);
+      setFolderSize(null);
+      setFolderFileCount(null);
+
+      Promise.all([
+        window.api.calculateFolderSize(file.path),
+        window.api.countFolderFiles(file.path),
+      ])
+        .then(([size, count]) => {
+          setFolderSize(size);
+          setFolderFileCount(count);
+        })
+        .catch((err) => {
+          console.error("Ошибка при расчете размера папки:", err);
+        })
+        .finally(() => setLoadingFolderStats(false));
+    } else {
+      setFolderSize(null);
+      setFolderFileCount(null);
+    }
+  }, [file?.path, file?.type]);
+
+  // Множественный выбор — показываем список выбранных элементов
+  if (files.length > 1) {
+    const totalSize = files.reduce((sum, f) => sum + (f.stats?.size || 0), 0);
+
+    return (
+      <Box
+        sx={{
+          width: `${width}px`,
+          minWidth: 220,
+          flexShrink: 0,
+          p: 2,
+          display: "flex",
+          flexDirection: "column",
+          gap: 1.5,
+          height: "100%",
+          overflowY: "auto",
+          boxSizing: "border-box",
+        }}
+      >
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          Выбрано элементов: {files.length}
+        </Typography>
+
+        <Typography variant="caption" color="text.secondary">
+          Общий размер файлов: {formatBytes(totalSize)}
+        </Typography>
+
+        <Divider />
+
+        <List disablePadding>
+          {files.map((f) => (
+            <ListItem key={f.id} disableGutters sx={{ py: 0.5, gap: 1 }}>
+              <InsertDriveFileIcon fontSize="small" color="action" sx={{ flexShrink: 0 }} />
+              <ListItemText
+                primary={f.name}
+                primaryTypographyProps={{ variant: "body2", noWrap: true }}
+                secondary={f.type === "directory" ? "Папка" : formatBytes(f.stats?.size)}
+                secondaryTypographyProps={{ variant: "caption" }}
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    );
+  }
+
   if (!file) {
     return (
       <Box
         sx={{
-          width: 320,
-          minWidth: 280,
+          width: `${width}px`,
+          minWidth: 220,
+          flexShrink: 0,
           p: 2,
           display: "flex",
           alignItems: "center",
@@ -108,8 +184,9 @@ export const Preview: React.FC<PreviewProps> = ({ file }) => {
   return (
     <Box
       sx={{
-        width: 340,
-        minWidth: 300,
+        width: `${width}px`,
+        minWidth: 220,
+        flexShrink: 0,
         p: 2,
         display: "flex",
         flexDirection: "column",
@@ -123,7 +200,8 @@ export const Preview: React.FC<PreviewProps> = ({ file }) => {
         {file.name}
       </Typography>
 
-      {/* ОКНО ПРЕДПРОСМОТРА */}
+      {/* ОКНО ПРЕДПРОСМОТРА (скрыто, если нет доступного предпросмотра) */}
+      {(file.type === "directory" || isImage || isVideo || isAudio || (isText && !readError)) && (
       <Paper
         elevation={0}
         sx={{
@@ -142,6 +220,24 @@ export const Preview: React.FC<PreviewProps> = ({ file }) => {
           boxSizing: "border-box",
         }}
       >
+        {/* Папка */}
+        {file.type === "directory" &&
+          (loadingFolderStats ? (
+            <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", width: "100%", height: "100%" }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <Box sx={{ textAlign: "center", color: "text.secondary", p: 2 }}>
+              <InsertDriveFileIcon sx={{ fontSize: 56, mb: 1 }} />
+              <Typography variant="body2">Папка</Typography>
+              {folderSize !== null && folderFileCount !== null && (
+                <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                  {formatBytes(folderSize)} · {folderFileCount} файлов
+                </Typography>
+              )}
+            </Box>
+          ))}
+
         {/* 1. Картинка */}
         {isImage && (
           <Box
@@ -195,16 +291,8 @@ export const Preview: React.FC<PreviewProps> = ({ file }) => {
           </Box>
         )}
 
-        {/* 5. Неизвестный формат или ошибка */}
-        {(!isImage && !isVideo && !isAudio && !isText) || readError ? (
-          <Box sx={{ textAlign: "center", color: "text.secondary" }}>
-            <InsertDriveFileIcon sx={{ fontSize: 56, mb: 1 }} />
-            <Typography variant="caption" display="block">
-              Предпросмотр недоступен
-            </Typography>
-          </Box>
-        ) : null}
       </Paper>
+      )}
 
       <Divider />
 
@@ -231,9 +319,24 @@ export const Preview: React.FC<PreviewProps> = ({ file }) => {
           <ListItem disableGutters sx={{ py: 0.5 }}>
             <ListItemText
               primary="Размер"
-              secondary={file.type === "directory" ? "--" : formatBytes(file.stats?.size)}
+              secondary={
+                file.type === "directory"
+                  ? folderSize !== null
+                    ? formatBytes(folderSize)
+                    : "--"
+                  : formatBytes(file.stats?.size)
+              }
             />
           </ListItem>
+
+          {file.type === "directory" && folderFileCount !== null && (
+            <ListItem disableGutters sx={{ py: 0.5 }}>
+              <ListItemText
+                primary="Файлов"
+                secondary={folderFileCount}
+              />
+            </ListItem>
+          )}
 
           <ListItem disableGutters sx={{ py: 0.5 }}>
             <ListItemText

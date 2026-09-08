@@ -16,6 +16,8 @@ import ExpandMore from "@mui/icons-material/ExpandMore";
 import ChevronRight from "@mui/icons-material/ChevronRight";
 import { AppBoxTree } from "../style/AppStyle";
 
+import "../types/api";
+
 // ==========================================
 // ТИПИЗАЦИЯ
 // ==========================================
@@ -48,19 +50,7 @@ export interface FileTreeNode {
 interface TreeProps {
   onFilesChange: (files: FileDetailItem[]) => void;
   onFolderSelect?: (path: string) => void;
-}
-
-declare global {
-  interface Window {
-    api: {
-      ping: () => Promise<string>;
-      openFolderDialog: () => Promise<string | null>;
-      getItemStats: (path: string) => Promise<FileItemStats>;
-      getOnlyDirectoriesTree: (path: string) => Promise<FileTreeNode>;
-      getFolderFiles: (path: string) => Promise<FileTreeNode[]>;
-      readFileText: (path: string) => Promise<string>;
-    };
-  }
+  width?: number;
 }
 
 // ==========================================
@@ -80,21 +70,47 @@ const FileTreeItem: React.FC<FileTreeItemProps> = ({
 }) => {
   const [open, setOpen] = useState(false);
 
+  const [isDragOver, setIsDragOver] = useState(false);
+
   const handleClick = () => {
     setOpen(!open);
     onSelectFolder(node.path);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setIsDragOver(true);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const raw = e.dataTransfer.getData("application/x-explorer-paths");
+    if (!raw) return;
+
+    try {
+      const paths: string[] = JSON.parse(raw);
+      await window.api.moveItems(paths, node.path);
+    } catch (error) {
+      console.error("Ошибка при перемещении файлов:", error);
+    }
   };
 
   return (
     <>
       <ListItemButton
         onClick={handleClick}
+        onDragOver={handleDragOver}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={handleDrop}
         sx={{
           pl: level * 2 + 1,
           py: 0.5,
           minHeight: 32,
           borderRadius: 1,
           "&:hover": { backgroundColor: "action.hover" },
+          ...(isDragOver && { backgroundColor: "primary.main", opacity: 0.3 }),
         }}
       >
         <ListItemIcon sx={{ minWidth: 28 }}>
@@ -141,9 +157,29 @@ const FileTreeItem: React.FC<FileTreeItemProps> = ({
 // ОСНОВНОЙ КОМПОНЕНТ TREE
 // ==========================================
 
-export const Tree: React.FC<TreeProps> = ({ onFilesChange, onFolderSelect }) => {
+export const Tree: React.FC<TreeProps> = ({ onFilesChange, onFolderSelect, width = 280 }) => {
   const [treeData, setTreeData] = useState<FileTreeNode | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+
+  const loadSavedPath = () => {
+    try {
+      const saved = localStorage.getItem("explorer_last_path");
+      if (saved) {
+        return saved;
+      }
+    } catch {
+      // Игнорируем ошибки localStorage
+    }
+    return null;
+  };
+
+  const savePath = (path: string) => {
+    try {
+      localStorage.setItem("explorer_last_path", path);
+    } catch {
+      // Игнорируем ошибки localStorage
+    }
+  };
 
   const handleSelectFolder = async (folderPath: string) => {
     try {
@@ -151,7 +187,9 @@ export const Tree: React.FC<TreeProps> = ({ onFilesChange, onFolderSelect }) => 
         onFolderSelect(folderPath);
       }
 
-      const items = await window.api.getFolderFiles(folderPath);
+      savePath(folderPath);
+
+      const items = await window.api.getFolderFilesFiltered(folderPath);
 
       const itemsWithStats = await Promise.all(
         items.map(async (item) => {
@@ -170,6 +208,38 @@ export const Tree: React.FC<TreeProps> = ({ onFilesChange, onFolderSelect }) => 
     }
   };
 
+  React.useEffect(() => {
+    const initializeTree = async () => {
+      try {
+        const savedPath = loadSavedPath();
+        if (savedPath) {
+          setLoading(true);
+          const tree = await window.api.getOnlyDirectoriesTreeFiltered(savedPath);
+          setTreeData(tree);
+          await handleSelectFolder(savedPath);
+        }
+      } catch (error) {
+        console.error("Ошибка при инициализации дерева:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    initializeTree();
+  }, []);
+
+  const loadTreeFromPath = async (folderPath: string) => {
+    try {
+      setLoading(true);
+      const tree = await window.api.getOnlyDirectoriesTreeFiltered(folderPath);
+      setTreeData(tree);
+      await handleSelectFolder(folderPath);
+    } catch (error) {
+      console.error("Ошибка при загрузке дерева:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLoadFolder = async () => {
     try {
       setLoading(true);
@@ -177,10 +247,7 @@ export const Tree: React.FC<TreeProps> = ({ onFilesChange, onFolderSelect }) => 
 
       if (!folderPath) return;
 
-      const tree = await window.api.getOnlyDirectoriesTree(folderPath);
-      setTreeData(tree);
-
-      await handleSelectFolder(folderPath);
+      await loadTreeFromPath(folderPath);
     } catch (error) {
       console.error("Ошибка при загрузке дерева:", error);
     } finally {
@@ -192,8 +259,9 @@ export const Tree: React.FC<TreeProps> = ({ onFilesChange, onFolderSelect }) => 
     <Box
       sx={{
         ...AppBoxTree,
-        width: 280,
-        minWidth: 240,
+        width: `${width}px`,
+        minWidth: 180,
+        flexShrink: 0,
         display: "flex",
         flexDirection: "column",
         height: "100%",
@@ -202,28 +270,9 @@ export const Tree: React.FC<TreeProps> = ({ onFilesChange, onFolderSelect }) => 
         boxSizing: "border-box",
       }}
     >
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 1.5,
-        }}
-      >
-        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "text.secondary" }}>
-          Проводник
-        </Typography>
-
-        <Button
-          variant="contained"
-          size="small"
-          onClick={handleLoadFolder}
-          disabled={loading}
-          sx={{ textTransform: "none" }}
-        >
-          {loading ? <CircularProgress size={16} /> : "Open Folder"}
-        </Button>
-      </Box>
+      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "text.secondary", mb: 1.5 }}>
+        Папки
+      </Typography>
 
       <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
         {treeData ? (

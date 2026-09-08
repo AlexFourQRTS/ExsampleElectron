@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron'
 import { createMainWindow } from './windows/mainWindow'
+import { WindowManagerService } from './windows/windowManagerService'
 import { setupIpcHandlers } from './ipc'
 
 app.whenReady().then(() => {
@@ -7,11 +8,13 @@ app.whenReady().then(() => {
   setupIpcHandlers()
 
   // 2. Создаем дефолтное окно
-  createMainWindow()
+  const mainWindow = createMainWindow()
+  WindowManagerService.register(mainWindow)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow()
+      const window = createMainWindow()
+      WindowManagerService.register(window)
     }
   })
 })

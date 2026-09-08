@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Box,
   Typography,
@@ -10,19 +10,52 @@ import {
   TableRow,
   Paper,
   Button,
+  CircularProgress,
 } from "@mui/material";
 import FolderIcon from "@mui/icons-material/Folder";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { FileDetailItem } from "./Tree";
+import { ContextMenu } from "./ContextMenu";
+import { ColumnResizeHandle } from "./ColumnResizeHandle";
+import { SelectionBox } from "./SelectionBox";
+import { useRubberBandSelection, SelectionRect } from "../hooks/useRubberBandSelection";
+import "../types/api";
+
+const COLUMN_WIDTHS_KEY = "explorer_column_widths";
+
+interface ColumnWidths {
+  name: number;
+  date: number;
+  type: number;
+  size: number;
+}
+
+const DEFAULT_COLUMN_WIDTHS: ColumnWidths = {
+  name: 280,
+  date: 180,
+  type: 140,
+  size: 160,
+};
+
+const loadColumnWidths = (): ColumnWidths => {
+  try {
+    const stored = localStorage.getItem(COLUMN_WIDTHS_KEY);
+    if (stored) return { ...DEFAULT_COLUMN_WIDTHS, ...JSON.parse(stored) };
+  } catch {
+    // Игнорируем ошибки localStorage
+  }
+  return DEFAULT_COLUMN_WIDTHS;
+};
 
 interface ContentProps {
   files: FileDetailItem[];
   currentPath: string | null;
-  selectedFileId?: string;
-  onSelectFile: (file: FileDetailItem) => void;
+  selectedFiles: FileDetailItem[];
+  onSelectionChange: (files: FileDetailItem[]) => void;
   onOpenFolder: (folderPath: string) => void;
   onGoBack: () => void;
+  onRefresh?: () => void;
 }
 
 const formatFileSize = (bytes?: number): string => {
@@ -48,11 +81,201 @@ const formatDate = (dateInput?: Date): string => {
 export const Content: React.FC<ContentProps> = ({
   files,
   currentPath,
-  selectedFileId,
-  onSelectFile,
+  selectedFiles,
+  onSelectionChange,
   onOpenFolder,
   onGoBack,
+  onRefresh,
 }) => {
+  const lastClickedIndex = React.useRef<number>(-1);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [selectedItem, setSelectedItem] = useState<FileDetailItem | null>(null);
+  const [folderStats, setFolderStats] = useState<Record<string, { size: number; fileCount: number }>>({});
+  const [loadingStats, setLoadingStats] = useState<Record<string, boolean>>({});
+  const [hiddenCount, setHiddenCount] = useState(0);
+  const [columnWidths, setColumnWidths] = useState<ColumnWidths>(loadColumnWidths);
+
+  const handleColumnResize = (column: keyof ColumnWidths, deltaX: number) => {
+    setColumnWidths((prev) => {
+      const next = { ...prev, [column]: Math.max(60, prev[column] + deltaX) };
+      localStorage.setItem(COLUMN_WIDTHS_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  // ===== Выделение мышкой (rubber-band selection) =====
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+  const rowRefs = React.useRef<Map<string, HTMLElement>>(new Map());
+  const [dragOverPath, setDragOverPath] = useState<string | null>(null);
+
+  const handleSelectionEnd = (rect: SelectionRect) => {
+    const selected: FileDetailItem[] = [];
+
+    files.forEach((item) => {
+      const rowEl = rowRefs.current.get(item.id);
+      const containerEl = scrollContainerRef.current;
+      if (!rowEl || !containerEl) return;
+
+      const rowTop = rowEl.offsetTop;
+      const rowBottom = rowTop + rowEl.offsetHeight;
+      const rowLeft = rowEl.offsetLeft;
+      const rowRight = rowLeft + rowEl.offsetWidth;
+
+      const intersects =
+        rect.x < rowRight &&
+        rect.x + rect.width > rowLeft &&
+        rect.y < rowBottom &&
+        rect.y + rect.height > rowTop;
+
+      if (intersects) selected.push(item);
+    });
+
+    onSelectionChange(selected);
+  };
+
+  const { selectionRect, handleMouseDown } = useRubberBandSelection({
+    containerRef: scrollContainerRef,
+    onSelectionEnd: handleSelectionEnd,
+  });
+
+  // ===== Ctrl+A — выделить все файлы =====
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "a") {
+        const active = document.activeElement;
+        const isTyping = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA");
+        if (isTyping) return;
+
+        e.preventDefault();
+        onSelectionChange(files);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [files, onSelectionChange]);
+
+  // ===== Drag & Drop файлов между папками/окнами =====
+  const handleDragStart = (e: React.DragEvent, item: FileDetailItem) => {
+    const draggedPaths = selectedFiles.some((f) => f.id === item.id)
+      ? selectedFiles.map((f) => f.path)
+      : [item.path];
+
+    e.dataTransfer.setData("application/x-explorer-paths", JSON.stringify(draggedPaths));
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOverRow = (e: React.DragEvent, item: FileDetailItem) => {
+    if (item.type !== "directory") return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverPath(item.path);
+  };
+
+  const handleDragLeaveRow = () => {
+    setDragOverPath(null);
+  };
+
+  const handleDropOnRow = async (e: React.DragEvent, item: FileDetailItem) => {
+    e.preventDefault();
+    setDragOverPath(null);
+    if (item.type !== "directory") return;
+    await performDrop(e, item.path);
+  };
+
+  const handleDropOnEmptyArea = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverPath(null);
+    if (!currentPath) return;
+    await performDrop(e, currentPath);
+  };
+
+  const performDrop = async (e: React.DragEvent, targetDir: string) => {
+    const raw = e.dataTransfer.getData("application/x-explorer-paths");
+    if (!raw) return;
+
+    try {
+      const paths: string[] = JSON.parse(raw);
+      const filtered = paths.filter((p) => {
+        const parentOfTarget = targetDir.substring(0, targetDir.lastIndexOf("/"));
+        return p !== targetDir && parentOfTarget !== p;
+      });
+      if (filtered.length === 0) return;
+
+      await window.api.moveItems(filtered, targetDir);
+      onRefresh?.();
+    } catch (error) {
+      console.error("Ошибка при перемещении файлов:", error);
+    }
+  };
+
+  React.useEffect(() => {
+    if (currentPath) {
+      window.api
+        .countHiddenFolders(currentPath)
+        .then((count) => setHiddenCount(count))
+        .catch(() => setHiddenCount(0));
+    }
+  }, [currentPath]);
+
+  const handleContextMenu = (e: React.MouseEvent, item: FileDetailItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Если правый клик по элементу вне текущего выделения — заменяем выделение на него
+    const isInSelection = selectedFiles.some((f) => f.id === item.id);
+    if (!isInSelection) {
+      onSelectionChange([item]);
+    }
+    setSelectedItem(item);
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleEmptyAreaContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setSelectedItem(null);
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleSelectItem = async (item: FileDetailItem, index: number, event: React.MouseEvent) => {
+    const isCtrl = event.ctrlKey || event.metaKey;
+    const isShift = event.shiftKey;
+
+    if (isShift && lastClickedIndex.current !== -1) {
+      const start = Math.min(lastClickedIndex.current, index);
+      const end = Math.max(lastClickedIndex.current, index);
+      const range = files.slice(start, end + 1);
+      onSelectionChange(range);
+    } else if (isCtrl) {
+      const isSelected = selectedFiles.some((f) => f.id === item.id);
+      const updated = isSelected
+        ? selectedFiles.filter((f) => f.id !== item.id)
+        : [...selectedFiles, item];
+      onSelectionChange(updated);
+      lastClickedIndex.current = index;
+    } else {
+      onSelectionChange([item]);
+      lastClickedIndex.current = index;
+    }
+
+    if (item.type === "directory" && !folderStats[item.path]) {
+      setLoadingStats((prev) => ({ ...prev, [item.path]: true }));
+      try {
+        const [size, fileCount] = await Promise.all([
+          window.api.calculateFolderSize(item.path),
+          window.api.countFolderFiles(item.path),
+        ]);
+        setFolderStats((prev) => ({
+          ...prev,
+          [item.path]: { size, fileCount },
+        }));
+      } catch (error) {
+        console.error("Ошибка при расчете размера папки:", error);
+      } finally {
+        setLoadingStats((prev) => ({ ...prev, [item.path]: false }));
+      }
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -99,7 +322,15 @@ export const Content: React.FC<ContentProps> = ({
       </Box>
 
       {/* Отрисовка контента */}
-      <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
+      <Box
+        ref={scrollContainerRef}
+        sx={{ flexGrow: 1, overflowY: "auto", position: "relative" }}
+        onContextMenu={handleEmptyAreaContextMenu}
+        onMouseDown={handleMouseDown}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={handleDropOnEmptyArea}
+      >
+        <SelectionBox rect={selectionRect} />
         {files.length === 0 ? (
           <Box
             sx={{
@@ -130,16 +361,34 @@ export const Content: React.FC<ContentProps> = ({
           <TableContainer
             component={Paper}
             elevation={0}
-            sx={{ border: 1, borderColor: "divider" }}
+            sx={{ border: 1, borderColor: "divider", minHeight: "100%" }}
           >
-            <Table size="small" stickyHeader>
+            <Table size="small" stickyHeader sx={{ tableLayout: "fixed" }}>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 600 }}>Имя</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Дата изменения</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Тип</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 600 }}>
-                    Размер
+                  <TableCell
+                    sx={{ fontWeight: 600, width: columnWidths.name, position: "relative", overflow: "hidden" }}
+                  >
+                    <Box sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Имя</Box>
+                    <ColumnResizeHandle onResize={(dx) => handleColumnResize("name", dx)} />
+                  </TableCell>
+                  <TableCell
+                    sx={{ fontWeight: 600, width: columnWidths.date, position: "relative", overflow: "hidden" }}
+                  >
+                    <Box sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Дата изменения</Box>
+                    <ColumnResizeHandle onResize={(dx) => handleColumnResize("date", dx)} />
+                  </TableCell>
+                  <TableCell
+                    sx={{ fontWeight: 600, width: columnWidths.type, position: "relative", overflow: "hidden" }}
+                  >
+                    <Box sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Тип</Box>
+                    <ColumnResizeHandle onResize={(dx) => handleColumnResize("type", dx)} />
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{ fontWeight: 600, width: columnWidths.size, position: "relative", overflow: "hidden" }}
+                  >
+                    <Box sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Размер</Box>
                   </TableCell>
                 </TableRow>
               </TableHead>
@@ -148,7 +397,24 @@ export const Content: React.FC<ContentProps> = ({
                 {currentPath && (
                   <TableRow
                     hover
+                    data-selectable-row="true"
                     onClick={onGoBack}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                    }}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      const raw = e.dataTransfer.getData("application/x-explorer-paths");
+                      if (!raw) return;
+                      const parentPath = currentPath.substring(0, currentPath.lastIndexOf("/")) || "/";
+                      try {
+                        await window.api.moveItems(JSON.parse(raw), parentPath);
+                        onRefresh?.();
+                      } catch (error) {
+                        console.error("Ошибка при перемещении файлов:", error);
+                      }
+                    }}
                     sx={{ cursor: "pointer", backgroundColor: "action.hover" }}
                   >
                     <TableCell colSpan={4}>
@@ -170,14 +436,28 @@ export const Content: React.FC<ContentProps> = ({
                 )}
 
                 {/* Список файлов и папок */}
-                {files.map((item) => {
-                  const isSelected = item.id === selectedFileId;
+                {files.map((item, index) => {
+                  const isSelected = selectedFiles.some((f) => f.id === item.id);
+                  const isLoading = loadingStats[item.path];
+                  const stats = folderStats[item.path];
+
                   return (
                     <TableRow
                       key={item.id}
+                      data-selectable-row="true"
+                      ref={(el) => {
+                        if (el) rowRefs.current.set(item.id, el);
+                        else rowRefs.current.delete(item.id);
+                      }}
                       hover
                       selected={isSelected}
-                      onClick={() => onSelectFile(item)}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, item)}
+                      onDragOver={(e) => handleDragOverRow(e, item)}
+                      onDragLeave={handleDragLeaveRow}
+                      onDrop={(e) => handleDropOnRow(e, item)}
+                      onClick={(e) => handleSelectItem(item, index, e)}
+                      onContextMenu={(e) => handleContextMenu(e, item)}
                       onDoubleClick={() => {
                         if (item.type === "directory") {
                           onOpenFolder(item.path);
@@ -187,34 +467,43 @@ export const Content: React.FC<ContentProps> = ({
                         cursor: "pointer",
                         userSelect: "none",
                         "&:last-child td, &:last-child th": { border: 0 },
+                        ...(dragOverPath === item.path && {
+                          backgroundColor: "primary.main",
+                          opacity: 0.2,
+                        }),
                       }}
                     >
-                      <TableCell component="th" scope="row">
+                      <TableCell
+                        component="th"
+                        scope="row"
+                        sx={{ width: columnWidths.name, overflow: "hidden" }}
+                      >
                         <Box
-                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                          sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}
                         >
                           {item.type === "directory" ? (
-                            <FolderIcon fontSize="small" color="primary" />
+                            <FolderIcon fontSize="small" color="primary" sx={{ flexShrink: 0 }} />
                           ) : (
                             <InsertDriveFileIcon
                               fontSize="small"
                               color="action"
+                              sx={{ flexShrink: 0 }}
                             />
                           )}
-                          <Typography variant="body2" noWrap>
+                          <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>
                             {item.name}
                           </Typography>
                         </Box>
                       </TableCell>
 
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
+                      <TableCell sx={{ width: columnWidths.date, overflow: "hidden" }}>
+                        <Typography variant="body2" color="text.secondary" noWrap>
                           {formatDate(item.stats?.updatedAt)}
                         </Typography>
                       </TableCell>
 
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
+                      <TableCell sx={{ width: columnWidths.type, overflow: "hidden" }}>
+                        <Typography variant="body2" color="text.secondary" noWrap>
                           {item.type === "directory"
                             ? "Папка"
                             : item.stats?.extension
@@ -223,12 +512,24 @@ export const Content: React.FC<ContentProps> = ({
                         </Typography>
                       </TableCell>
 
-                      <TableCell align="right">
-                        <Typography variant="body2" color="text.secondary">
-                          {item.type === "directory"
-                            ? "--"
-                            : formatFileSize(item.stats?.size)}
-                        </Typography>
+                      <TableCell align="right" sx={{ width: columnWidths.size, overflow: "hidden" }}>
+                        {item.type === "directory" ? (
+                          isLoading ? (
+                            <CircularProgress size={16} />
+                          ) : stats ? (
+                            <Typography variant="body2" color="text.secondary" noWrap>
+                              {formatFileSize(stats.size)} ({stats.fileCount} файлов)
+                            </Typography>
+                          ) : (
+                            <Typography variant="body2" color="text.secondary" noWrap>
+                              --
+                            </Typography>
+                          )
+                        ) : (
+                          <Typography variant="body2" color="text.secondary" noWrap>
+                            {formatFileSize(item.stats?.size)}
+                          </Typography>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
@@ -238,6 +539,22 @@ export const Content: React.FC<ContentProps> = ({
           </TableContainer>
         )}
       </Box>
+
+      <ContextMenu
+        open={!!contextMenu}
+        x={contextMenu?.x || 0}
+        y={contextMenu?.y || 0}
+        item={selectedItem}
+        selectedFiles={selectedFiles}
+        onClose={() => setContextMenu(null)}
+        onRefresh={() => {
+          onRefresh?.();
+          setFolderStats({});
+        }}
+        currentPath={currentPath}
+        hiddenCount={hiddenCount}
+        onOpenFolder={onOpenFolder}
+      />
     </Box>
   );
 };

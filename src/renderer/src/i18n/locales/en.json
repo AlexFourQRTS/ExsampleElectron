@@ -1,0 +1,59 @@
+{
+  "common": {
+    "folder": "Folder",
+    "file": "File",
+    "delete": "Delete",
+    "rename": "Rename",
+    "create": "Create",
+    "cancel": "Cancel",
+    "save": "Save",
+    "back": "Back",
+    "itemsHidden": "items hidden"
+  },
+  "explorer": {
+    "openFolder": "Open Folder",
+    "path": "Path",
+    "name": "Name",
+    "modified": "Modified",
+    "type": "Type",
+    "size": "Size",
+    "empty": "Folder is empty",
+    "goBack": "Go back",
+    "navigator": "Navigator"
+  },
+  "settings": {
+    "title": "Settings",
+    "showHidden": "Show hidden files (dotfiles)",
+    "showUserHidden": "Show folders I've manually hidden",
+    "viewMode": "View mode",
+    "setDefault": "Set as default file manager",
+    "bookmarks": "Bookmarks",
+    "addCurrent": "Add current folder",
+    "about": "About"
+  },
+  "contextMenu": {
+    "open": "Open",
+    "openWith": "Open with...",
+    "showIn": "Show in Nautilus",
+    "createFolder": "Create Folder",
+    "createFile": "Create Text File",
+    "createScript": "Create Bash Script",
+    "cut": "Cut",
+    "copy": "Copy",
+    "paste": "Paste",
+    "copyPath": "Copy Path",
+    "rename": "Rename",
+    "compress": "Send to ZIP",
+    "delete": "Delete",
+    "properties": "Properties",
+    "showHiddenFiles": "Show hidden files",
+    "hideThisFolder": "Hide this folder",
+    "unhideThisFolder": "Unhide this folder"
+  },
+  "errors": {
+    "invalidPath": "Invalid path",
+    "permissionDenied": "Permission denied",
+    "folderNotFound": "Folder not found",
+    "failedToRead": "Failed to read folder"
+  }
+}

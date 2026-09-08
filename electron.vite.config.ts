@@ -12,6 +12,12 @@ export default defineConfig({
   renderer: {
     resolve: {
       alias: {
+        '@': resolve('src/renderer/src'),
+        '@components': resolve('src/renderer/src/app/component'),
+        '@services': resolve('src/renderer/src/services'),
+        '@types': resolve('src/renderer/src/app/types'),
+        '@utils': resolve('src/renderer/src/utils'),
+        '@styles': resolve('src/renderer/src/app/style'),
         '@renderer': resolve('src/renderer/src')
       }
     },
