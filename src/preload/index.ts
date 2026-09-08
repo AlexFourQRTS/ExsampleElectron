@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('api', {
   getOnlyDirectoriesTreeFiltered: (path: string) => ipcRenderer.invoke('getOnlyDirectoriesTreeFiltered', path),
   getHomeDirectory: () => ipcRenderer.invoke('getHomeDirectory'),
   registerAsDefaultFileManager: () => ipcRenderer.invoke('registerAsDefaultFileManager'),
+  generateSudoInstallCommand: () => ipcRenderer.invoke('generateSudoInstallCommand'),
   openTerminalAt: (dirPath: string) => ipcRenderer.invoke('openTerminalAt', dirPath),
   openWithSystem: (itemPath: string) => ipcRenderer.invoke('openWithSystem', itemPath),
   showItemInFolder: (itemPath: string) => ipcRenderer.invoke('showItemInFolder', itemPath),

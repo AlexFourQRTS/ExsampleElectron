@@ -37,6 +37,7 @@ import Inventory2Icon from "@mui/icons-material/Inventory2";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import InfoIcon from "@mui/icons-material/Info";
 import AddIcon from "@mui/icons-material/Add";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import DescriptionIcon from "@mui/icons-material/Description";
 import CodeIcon from "@mui/icons-material/Code";
@@ -86,6 +87,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   "pin": <PushPinIcon fontSize="small" />,
   "info": <InfoIcon fontSize="small" />,
   "add": <AddIcon fontSize="small" />,
+  "refresh": <RefreshIcon fontSize="small" />,
 };
 
 const CREATE_TYPE_ICON_MAP: Record<string, React.ReactNode> = {
@@ -232,6 +234,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
       case "properties":
         setPropertiesOpen(true);
+        break;
+
+      case "refresh":
+        onRefresh();
         break;
 
       default:

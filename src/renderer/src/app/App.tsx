@@ -1,11 +1,15 @@
-import React, { useState } from "react";
-import { Container, IconButton, Box, Tooltip, Typography, Button, CircularProgress } from "@mui/material";
+import React, { useState, useMemo } from "react";
+import { Container, IconButton, Box, Tooltip, Typography, Button, CircularProgress, ThemeProvider, CssBaseline } from "@mui/material";
 import SettingsIcon from "@mui/icons-material/Settings";
+import DarkModeIcon from "@mui/icons-material/DarkMode";
+import LightModeIcon from "@mui/icons-material/LightMode";
 import { Tree, FileDetailItem } from "./component/Tree";
 import { Content } from "./component/Content";
 import { Preview } from "./component/Preview";
 import { SettingsModal } from "./component/SettingsModal";
 import { ResizeHandle } from "./component/ResizeHandle";
+import { createAppTheme } from "./theme/theme";
+import { ThemeService, ThemeMode } from "@services";
 import "./types/api";
 
 const TREE_WIDTH_KEY = "explorer_tree_width";
@@ -13,11 +17,20 @@ const PREVIEW_WIDTH_KEY = "explorer_preview_width";
 const DEFAULT_TREE_WIDTH = 280;
 const DEFAULT_PREVIEW_WIDTH = 340;
 
+const themeService = new ThemeService();
+
 export default function App(): JSX.Element {
   const [files, setFiles] = useState<FileDetailItem[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<FileDetailItem[]>([]);
   const [currentPath, setCurrentPath] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => themeService.getMode());
+
+  const theme = useMemo(() => createAppTheme(themeMode), [themeMode]);
+
+  const handleToggleTheme = () => {
+    setThemeMode(themeService.toggle());
+  };
   const [isLoading, setIsLoading] = useState(true);
   const [treeWidth, setTreeWidth] = useState<number>(() => {
     const saved = localStorage.getItem(TREE_WIDTH_KEY);
@@ -121,7 +134,8 @@ export default function App(): JSX.Element {
   };
 
   return (
-    <>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
       <Container
         maxWidth={false}
         disableGutters
@@ -155,9 +169,15 @@ export default function App(): JSX.Element {
               sx={{
                 display: "flex",
                 justifyContent: "flex-end",
+                gap: 0.5,
                 mb: 1,
               }}
             >
+              <Tooltip title={themeMode === "dark" ? "Светлая тема" : "Графитовая тема"}>
+                <IconButton onClick={handleToggleTheme} size="small">
+                  {themeMode === "dark" ? <LightModeIcon /> : <DarkModeIcon />}
+                </IconButton>
+              </Tooltip>
               <Tooltip title="Настройки">
                 <IconButton
                   onClick={() => setSettingsOpen(true)}
@@ -238,6 +258,6 @@ export default function App(): JSX.Element {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
       />
-    </>
+    </ThemeProvider>
   );
 }

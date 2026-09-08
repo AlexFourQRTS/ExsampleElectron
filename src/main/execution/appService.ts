@@ -1,5 +1,6 @@
 import { dialog, app } from 'electron'
 import * as fs from 'fs/promises'
+import * as fsSync from 'fs'
 import * as path from 'path'
 import { execSync } from 'child_process'
 import * as os from 'os'
@@ -30,9 +31,9 @@ export interface FileTreeNode {
 // ==========================================
 
 export class AppService {
-  // 0. Получить домашнюю папку
+  // 0. Получить папку по умолчанию для первого запуска
   static getHomeDirectory(): string {
-    return process.env.HOME || process.env.USERPROFILE || '/home'
+    return os.platform() === 'win32' ? process.env.USERPROFILE || 'C:\\' : '/home'
   }
 
   // 1. Пинг
@@ -426,62 +427,162 @@ export class AppService {
   }
 
   // 22. Регистрация приложения как обработчика папок (Linux)
-  static async registerAsDefaultFileManager(): Promise<void> {
+  static async registerAsDefaultFileManager(): Promise<string> {
     const platform = os.platform()
+    const log: string[] = []
 
     if (platform === 'linux') {
+      // Проверяем наличие xdg-mime, без него регистрация невозможна
       try {
-        const homeDir = process.env.HOME || '/home'
-        const applicationsDir = path.join(homeDir, '.local/share/applications')
-        await fs.mkdir(applicationsDir, { recursive: true })
-
-        const desktopFilePath = path.join(applicationsDir, 'electron-explorer.desktop')
-        const appPath = app.getAppPath()
-        const execPath = process.execPath
-
-        const desktopContent = `[Desktop Entry]
-Type=Application
-Name=Electron Explorer
-Exec=${execPath} "%F"
-Icon=folder
-Categories=Utility;
-MimeType=inode/directory;
-Terminal=false
-`
-
-        await fs.writeFile(desktopFilePath, desktopContent, 'utf-8')
-
-        // Устанавливаем как обработчик по умолчанию
-        try {
-          execSync('xdg-mime default electron-explorer.desktop inode/directory', { stdio: 'pipe' })
-        } catch (error) {
-          console.error('Ошибка при регистрации xdg-mime:', error)
-        }
-      } catch (error) {
-        throw new Error(`Не удалось зарегистрировать приложение: ${error}`)
+        execSync('which xdg-mime', { stdio: 'pipe' })
+      } catch {
+        throw new Error(
+          'Утилита xdg-mime не найдена. Установите пакет xdg-utils (sudo apt install xdg-utils)'
+        )
       }
+
+      const homeDir = process.env.HOME
+      if (!homeDir) {
+        throw new Error('Не удалось определить домашнюю директорию (HOME)')
+      }
+
+      const applicationsDir = path.join(homeDir, '.local/share/applications')
+      await fs.mkdir(applicationsDir, { recursive: true })
+
+      const desktopFilePath = path.join(applicationsDir, 'electron-explorer.desktop')
+      const desktopContent = this.buildDesktopEntryContent()
+
+      await fs.writeFile(desktopFilePath, desktopContent, 'utf-8')
+      await fs.chmod(desktopFilePath, 0o755)
+      log.push(`Создан .desktop файл: ${desktopFilePath}`)
+
+      try {
+        execSync('xdg-mime default electron-explorer.desktop inode/directory', { stdio: 'pipe' })
+        log.push('xdg-mime default inode/directory установлен')
+      } catch (error: any) {
+        throw new Error(`Не удалось выполнить xdg-mime: ${error.message || error}`)
+      }
+
+      // На GNOME/Nautilus и других gio-based окружениях xdg-mime зачастую игнорируется —
+      // дублируем регистрацию через gio mime, если утилита доступна
+      try {
+        execSync('which gio', { stdio: 'pipe' })
+        execSync('gio mime inode/directory electron-explorer.desktop', { stdio: 'pipe' })
+        log.push('gio mime inode/directory установлен (для GNOME/Nautilus)')
+      } catch {
+        log.push('gio не найден или недоступен — пропущено (не критично)')
+      }
+
+      // Обновляем кэш desktop-файлов, иначе DE может не увидеть новый .desktop сразу
+      try {
+        execSync(`update-desktop-database "${applicationsDir}"`, { stdio: 'pipe' })
+        log.push('Кэш desktop-файлов обновлён')
+      } catch {
+        log.push('update-desktop-database не найден — пропущено (не критично)')
+      }
+
+      // Диагностика: проверяем, что реально зарегистрировано в системе
+      try {
+        const current = execSync('xdg-mime query default inode/directory', { stdio: 'pipe' })
+          .toString()
+          .trim()
+        log.push(`Текущий обработчик inode/directory: ${current}`)
+        if (current !== 'electron-explorer.desktop') {
+          log.push(
+            'ВНИМАНИЕ: система не подтвердила смену обработчика. ' +
+              'Некоторые окружения (GNOME/Nautilus) игнорируют xdg-mime для inode/directory ' +
+              'и требуют смены через системные настройки "Приложения по умолчанию".'
+          )
+        }
+      } catch {
+        // query может быть недоступен — не критично
+      }
+
+      return log.join('\n')
     } else if (platform === 'darwin') {
       try {
-        execSync(
-          `duti -s com.electron.explorer com.apple.bundle-identifier com.apple.Finder`,
-          { stdio: 'pipe' }
-        )
-      } catch (error) {
-        throw new Error(`Не удалось зарегистрировать на macOS: ${error}`)
+        execSync('which duti', { stdio: 'pipe' })
+      } catch {
+        throw new Error('Утилита duti не найдена. Установите её: brew install duti')
+      }
+
+      try {
+        execSync(`duti -s com.electron.explorer com.apple.bundle-identifier com.apple.Finder`, {
+          stdio: 'pipe',
+        })
+        return 'Зарегистрировано через duti'
+      } catch (error: any) {
+        throw new Error(`Не удалось зарегистрировать на macOS: ${error.message || error}`)
       }
     }
+
+    throw new Error(`Платформа ${platform} не поддерживается для регистрации по умолчанию`)
+  }
+
+  // 22b. Строит содержимое .desktop файла (общее для user-level и sudo-регистрации)
+  private static buildDesktopEntryContent(): string {
+    // В dev-режиме process.execPath указывает на бинарник Electron, а не на наше
+    // приложение — ему обязательно нужно передать путь до app (app.getAppPath()).
+    // В собранном (packaged) виде execPath уже указывает на итоговый бинарник.
+    const execLine = app.isPackaged
+      ? `${process.execPath} %f`
+      : `${process.execPath} ${app.getAppPath()} %f`
+
+    return `[Desktop Entry]
+Type=Application
+Name=Electron Explorer
+Exec=${execLine}
+Icon=folder
+Categories=Utility;System;
+MimeType=inode/directory;
+Terminal=false
+StartupNotify=true
+`
+  }
+
+  // 22c. Генерирует готовую команду для терминала (с sudo), которую пользователь
+  // может скопировать и выполнить сам — устанавливает .desktop в системную
+  // директорию /usr/share/applications, что часто работает надёжнее user-level
+  // регистрации и не зависит от прав на запись в ~/.local/share.
+  // Используем "sudo tee ... <<'EOF'" — кавычки вокруг EOF отключают подстановку
+  // переменных/спецсимволов внутри heredoc, поэтому содержимое передаётся буквально.
+  static generateSudoInstallCommand(): string {
+    const desktopContent = this.buildDesktopEntryContent()
+
+    return [
+      `sudo tee /usr/share/applications/electron-explorer.desktop > /dev/null << 'EOF'`,
+      desktopContent.trimEnd(),
+      `EOF`,
+      `sudo xdg-mime default electron-explorer.desktop inode/directory`,
+      `command -v gio >/dev/null 2>&1 && sudo gio mime inode/directory electron-explorer.desktop`,
+      `sudo update-desktop-database /usr/share/applications`,
+    ].join('\n')
   }
 
   // 23. Открытие папки из аргументов командной строки
-  static getFolderFromArgs(): string | null {
-    const args = process.argv
-    for (let i = 0; i < args.length; i++) {
-      const arg = args[i]
+  // Именно так система передаёт путь при двойном клике на папку,
+  // назначенную этому приложению через registerAsDefaultFileManager()
+  static getFolderFromArgs(argv: string[] = process.argv): string | null {
+    for (const arg of argv) {
       if (arg.startsWith('--folder=')) {
         return arg.substring(9)
       }
-      if (!arg.startsWith('-') && !arg.includes('electron') && !arg.includes('.js')) {
-        return arg
+    }
+
+    // Ищем последний аргумент, реально указывающий на существующую директорию.
+    // В dev-режиме argv = [electronBin, appPath, ...userArgs], в packaged-режиме
+    // argv = [appBin, ...userArgs] — поэтому проверяем реальное существование,
+    // а не полагаемся на позицию аргумента.
+    for (let i = argv.length - 1; i >= 0; i--) {
+      const arg = argv[i]
+      if (arg.startsWith('-')) continue
+      try {
+        const stats = fsSync.statSync(arg)
+        if (stats.isDirectory()) {
+          return arg
+        }
+      } catch {
+        // Не путь — пропускаем
       }
     }
     return null

@@ -16,6 +16,10 @@ export interface ContextMenuConfig {
 }
 
 export const DEFAULT_CONTEXT_MENU_ITEMS: ContextMenuItem[] = [
+  // Обновить — только для пустой области, перезагружает содержимое текущей папки
+  { id: "refresh", label: "Обновить", icon: "refresh", enabled: true, order: -2, type: "action", context: "empty" },
+  { id: "divider-0", label: "", enabled: true, order: -1, type: "divider", context: "empty" },
+
   // Открытие (только для выбранного элемента)
   { id: "open", label: "Открыть", icon: "open", enabled: true, order: 0, type: "action", context: "item" },
   { id: "open-with", label: "Открыть с помощью...", icon: "open-with", enabled: true, order: 1, type: "action", context: "item" },

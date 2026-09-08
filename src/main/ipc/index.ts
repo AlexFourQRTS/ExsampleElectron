@@ -152,6 +152,10 @@ export function setupIpcHandlers(): void {
     async () => await AppService.registerAsDefaultFileManager(),
   );
 
+  ipcMain.handle("generateSudoInstallCommand", () =>
+    AppService.generateSudoInstallCommand(),
+  );
+
   // Терминал
   ipcMain.handle("openTerminalAt", (_, dirPath: string) => {
     TerminalService.openTerminalAt(dirPath);

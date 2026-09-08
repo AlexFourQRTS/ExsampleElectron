@@ -367,28 +367,49 @@ export const Content: React.FC<ContentProps> = ({
               <TableHead>
                 <TableRow>
                   <TableCell
-                    sx={{ fontWeight: 600, width: columnWidths.name, position: "relative", overflow: "hidden" }}
+                    sx={{
+                      fontWeight: 600,
+                      width: columnWidths.name,
+                      position: "relative",
+                      overflow: "hidden",
+                      borderRight: 1,
+                      borderRightColor: "divider",
+                    }}
                   >
-                    <Box sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Имя</Box>
+                    <Box sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Название</Box>
                     <ColumnResizeHandle onResize={(dx) => handleColumnResize("name", dx)} />
                   </TableCell>
                   <TableCell
-                    sx={{ fontWeight: 600, width: columnWidths.date, position: "relative", overflow: "hidden" }}
-                  >
-                    <Box sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Дата изменения</Box>
-                    <ColumnResizeHandle onResize={(dx) => handleColumnResize("date", dx)} />
-                  </TableCell>
-                  <TableCell
-                    sx={{ fontWeight: 600, width: columnWidths.type, position: "relative", overflow: "hidden" }}
+                    sx={{
+                      fontWeight: 600,
+                      width: columnWidths.type,
+                      position: "relative",
+                      overflow: "hidden",
+                      borderRight: 1,
+                      borderRightColor: "divider",
+                    }}
                   >
                     <Box sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Тип</Box>
                     <ColumnResizeHandle onResize={(dx) => handleColumnResize("type", dx)} />
                   </TableCell>
                   <TableCell
                     align="right"
-                    sx={{ fontWeight: 600, width: columnWidths.size, position: "relative", overflow: "hidden" }}
+                    sx={{
+                      fontWeight: 600,
+                      width: columnWidths.size,
+                      position: "relative",
+                      overflow: "hidden",
+                      borderRight: 1,
+                      borderRightColor: "divider",
+                    }}
                   >
                     <Box sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Размер</Box>
+                    <ColumnResizeHandle onResize={(dx) => handleColumnResize("size", dx)} />
+                  </TableCell>
+                  <TableCell
+                    sx={{ fontWeight: 600, width: columnWidths.date, position: "relative", overflow: "hidden" }}
+                  >
+                    <Box sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Дата изменения</Box>
                   </TableCell>
                 </TableRow>
               </TableHead>
@@ -476,7 +497,12 @@ export const Content: React.FC<ContentProps> = ({
                       <TableCell
                         component="th"
                         scope="row"
-                        sx={{ width: columnWidths.name, overflow: "hidden" }}
+                        sx={{
+                          width: columnWidths.name,
+                          overflow: "hidden",
+                          borderRight: 1,
+                          borderRightColor: "divider",
+                        }}
                       >
                         <Box
                           sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}
@@ -496,13 +522,14 @@ export const Content: React.FC<ContentProps> = ({
                         </Box>
                       </TableCell>
 
-                      <TableCell sx={{ width: columnWidths.date, overflow: "hidden" }}>
-                        <Typography variant="body2" color="text.secondary" noWrap>
-                          {formatDate(item.stats?.updatedAt)}
-                        </Typography>
-                      </TableCell>
-
-                      <TableCell sx={{ width: columnWidths.type, overflow: "hidden" }}>
+                      <TableCell
+                        sx={{
+                          width: columnWidths.type,
+                          overflow: "hidden",
+                          borderRight: 1,
+                          borderRightColor: "divider",
+                        }}
+                      >
                         <Typography variant="body2" color="text.secondary" noWrap>
                           {item.type === "directory"
                             ? "Папка"
@@ -512,7 +539,15 @@ export const Content: React.FC<ContentProps> = ({
                         </Typography>
                       </TableCell>
 
-                      <TableCell align="right" sx={{ width: columnWidths.size, overflow: "hidden" }}>
+                      <TableCell
+                        align="right"
+                        sx={{
+                          width: columnWidths.size,
+                          overflow: "hidden",
+                          borderRight: 1,
+                          borderRightColor: "divider",
+                        }}
+                      >
                         {item.type === "directory" ? (
                           isLoading ? (
                             <CircularProgress size={16} />
@@ -530,6 +565,12 @@ export const Content: React.FC<ContentProps> = ({
                             {formatFileSize(item.stats?.size)}
                           </Typography>
                         )}
+                      </TableCell>
+
+                      <TableCell sx={{ width: columnWidths.date, overflow: "hidden" }}>
+                        <Typography variant="body2" color="text.secondary" noWrap>
+                          {formatDate(item.stats?.updatedAt)}
+                        </Typography>
                       </TableCell>
                     </TableRow>
                   );

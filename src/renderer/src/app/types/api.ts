@@ -39,7 +39,8 @@ declare global {
       isFolderHidden: (path: string) => Promise<boolean>;
       getFolderFilesFiltered: (path: string) => Promise<FileTreeNode[]>;
       getOnlyDirectoriesTreeFiltered: (path: string) => Promise<FileTreeNode>;
-      registerAsDefaultFileManager: () => Promise<void>;
+      registerAsDefaultFileManager: () => Promise<string>;
+      generateSudoInstallCommand: () => Promise<string>;
       openTerminalAt: (dirPath: string) => Promise<void>;
       openWithSystem: (itemPath: string) => Promise<void>;
       showItemInFolder: (itemPath: string) => Promise<void>;
